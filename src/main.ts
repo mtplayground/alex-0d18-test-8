@@ -3,6 +3,9 @@ import { GameLoop } from './core/GameLoop'
 import { input } from './core/Input'
 import type { Scene } from './core/Scene'
 import { SceneManager } from './core/SceneManager'
+import { Bullet } from './entities/Bullet'
+import { EntityManager } from './entities/EntityManager'
+import { BulletFiringController } from './game/BulletFiringController'
 import { BrickQuadrant } from './tiles/BrickDamage'
 import { TileGrid } from './tiles/TileGrid'
 import { TileType } from './tiles/TileTypes'
@@ -59,16 +62,75 @@ const createBootTileGrid = (): TileGrid => {
 }
 
 const bootTileGrid = createBootTileGrid()
+const bulletManager = new EntityManager()
+const playerFiringController = new BulletFiringController()
+const playerShooter = {
+  position: { x: 6 * bootTileGrid.tileSize, y: 9 * bootTileGrid.tileSize },
+  size: { x: bootTileGrid.tileSize, y: bootTileGrid.tileSize },
+  direction: 'up' as const,
+  owner: 'player' as const,
+}
+
+const getActiveBullets = (): Bullet[] =>
+  bulletManager
+    .getAll()
+    .filter((entity): entity is Bullet => entity instanceof Bullet)
+
+const pruneBulletsOutsideGrid = (): void => {
+  for (const bullet of getActiveBullets()) {
+    if (
+      bullet.isOutsideBounds(bootTileGrid.worldWidth, bootTileGrid.worldHeight)
+    ) {
+      bullet.alive = false
+    }
+  }
+
+  bulletManager.pruneDead()
+}
+
+const renderPlayerShooter = (ctx: CanvasRenderingContext2D): void => {
+  ctx.save()
+  ctx.fillStyle = '#38bdf8'
+  ctx.fillRect(
+    playerShooter.position.x,
+    playerShooter.position.y,
+    playerShooter.size.x,
+    playerShooter.size.y,
+  )
+  ctx.fillStyle = '#e0f2fe'
+  ctx.fillRect(
+    playerShooter.position.x + playerShooter.size.x / 2 - 3,
+    playerShooter.position.y - 8,
+    6,
+    12,
+  )
+  ctx.restore()
+}
 
 const bootScene: Scene = {
   enter: () => undefined,
   exit: () => undefined,
   update: (dt: number): void => {
-    void dt
+    playerFiringController.update(dt)
+
+    const bullet = playerFiringController.tryFire(
+      input,
+      getActiveBullets(),
+      playerShooter,
+    )
+
+    if (bullet) {
+      bulletManager.add(bullet)
+    }
+
+    bulletManager.update(dt)
+    pruneBulletsOutsideGrid()
   },
   render: (ctx: CanvasRenderingContext2D, fps: number): void => {
     clearScreen(ctx)
     renderTileGrid(ctx, bootTileGrid, { layer: TileRenderLayer.Base })
+    renderPlayerShooter(ctx)
+    bulletManager.render(ctx)
     renderTileGrid(ctx, bootTileGrid, { layer: TileRenderLayer.Overlay })
 
     ctx.save()

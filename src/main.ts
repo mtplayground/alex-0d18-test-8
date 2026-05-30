@@ -28,7 +28,9 @@ import {
 } from './game/PowerUps'
 import { loadLevel } from './levels/LevelLoader'
 import { STARTER_LEVELS } from './levels/levels'
-import { TitleScene } from './scenes/TitleScene'
+import { PauseScene } from './scenes/PauseScene'
+import { ResultScene } from './scenes/ResultScene'
+import { DEFAULT_HIGH_SCORE_KEY, TitleScene } from './scenes/TitleScene'
 import { TileType } from './tiles/TileTypes'
 import { renderTileGrid, TileRenderLayer } from './tiles/renderTileGrid'
 
@@ -61,226 +63,297 @@ const getTitleStorage = (): Storage | null => {
   }
 }
 
-const bootLevel = loadLevel(STARTER_LEVELS[0])
-const bootTileGrid = bootLevel.grid
-const bulletManager = new EntityManager()
-const tankManager = new EntityManager()
-const effectManager = new EntityManager()
-const powerUpManager = new EntityManager()
-const playerFiringController = new BulletFiringController()
-const levelSceneChangeEmitter = new LevelSceneChangeEmitter()
-const powerUpEffects = createPowerUpEffectState()
-const gameState = {
-  score: 0,
-  baseDestroyed: false,
-}
-let latestSceneChangeEvent: SceneChangeEvent | null = null
-const enemySpawner = new EnemySpawner({
-  spawnPoints: bootLevel.enemySpawnPoints,
-  enemySize: bootLevel.enemySize,
-  wave: bootLevel.wave,
-})
-const playerTank = tankManager.add(
-  new PlayerTank({
-    position: bootLevel.playerSpawn,
-    size: { x: bootTileGrid.tileSize, y: bootTileGrid.tileSize },
-    direction: 'up',
-    lives: 3,
-  }),
-)
-
-const getPlayerShooter = () => ({
-  position: playerTank.position,
-  size: playerTank.size,
-  direction: playerTank.direction,
-  owner: playerTank.faction,
-})
-
-const getActiveBullets = (): Bullet[] =>
-  bulletManager
-    .getAll()
-    .filter((entity): entity is Bullet => entity instanceof Bullet)
-
-const getActivePowerUps = (): PowerUp[] =>
-  powerUpManager
-    .getAll()
-    .filter((entity): entity is PowerUp => entity instanceof PowerUp)
-
-const getActiveTanks = (): Tank[] =>
-  tankManager
-    .getAll()
-    .filter((entity): entity is Tank => entity instanceof Tank)
-
-const getActiveEnemies = (): EnemyTank[] =>
-  tankManager
-    .getAll()
-    .filter((entity): entity is EnemyTank => entity instanceof EnemyTank)
-
-const getActiveEnemyCount = (): number =>
-  getActiveEnemies().filter((enemy) => enemy.alive).length
-
-const spawnEnemies = (dt: number): void => {
-  const result = enemySpawner.update(dt, getActiveEnemies())
-
-  if (!result) {
+const persistHighScore = (score: number): void => {
+  if (!Number.isFinite(score) || score <= 0) {
     return
   }
 
-  tankManager.add(result.enemy)
-  effectManager.add(result.flash)
-}
+  const storage = getTitleStorage()
 
-const pruneBulletsOutsideGrid = (): void => {
-  for (const bullet of getActiveBullets()) {
-    if (
-      bullet.isOutsideBounds(bootTileGrid.worldWidth, bootTileGrid.worldHeight)
-    ) {
-      bullet.alive = false
-    }
+  if (!storage) {
+    return
   }
 
-  bulletManager.pruneDead()
+  try {
+    const currentHighScore = Number.parseInt(
+      storage.getItem(DEFAULT_HIGH_SCORE_KEY) ?? '0',
+      10,
+    )
+    const safeCurrentHighScore = Number.isFinite(currentHighScore)
+      ? currentHighScore
+      : 0
+
+    if (score > safeCurrentHighScore) {
+      storage.setItem(DEFAULT_HIGH_SCORE_KEY, Math.floor(score).toString())
+    }
+  } catch {
+    return
+  }
 }
 
-const resolveBulletTerrainCollisions = (): void => {
-  for (const bullet of getActiveBullets()) {
-    const result = resolveBulletTerrainCollision(bullet, bootTileGrid)
+const createGameScene = (levelIndex: number, initialScore = 0): Scene => {
+  const levelDefinition = STARTER_LEVELS[levelIndex]
 
-    if (result.baseDestroyed) {
-      if (isBaseShieldActive(powerUpEffects) && result.tile) {
-        bootTileGrid.set(result.tile.x, result.tile.y, TileType.Base)
-      } else {
-        gameState.baseDestroyed = true
-      }
-    }
+  if (!levelDefinition) {
+    throw new Error(`No level definition exists for index ${levelIndex}.`)
   }
 
-  bulletManager.pruneDead()
-}
-
-const resolveBulletTankHits = (): void => {
-  const results = resolveBulletTankCollisions(
-    getActiveBullets(),
-    getActiveTanks(),
-    gameState,
+  const level = loadLevel(levelDefinition)
+  const tileGrid = level.grid
+  const bulletManager = new EntityManager()
+  const tankManager = new EntityManager()
+  const effectManager = new EntityManager()
+  const powerUpManager = new EntityManager()
+  const playerFiringController = new BulletFiringController()
+  const levelSceneChangeEmitter = new LevelSceneChangeEmitter({
+    initialLevelIndex: levelIndex,
+  })
+  const powerUpEffects = createPowerUpEffectState()
+  const gameState = {
+    score: initialScore,
+    baseDestroyed: false,
+  }
+  let latestSceneChangeEvent: SceneChangeEvent | null = null
+  const enemySpawner = new EnemySpawner({
+    spawnPoints: level.enemySpawnPoints,
+    enemySize: level.enemySize,
+    wave: level.wave,
+  })
+  const playerTank = tankManager.add(
+    new PlayerTank({
+      position: level.playerSpawn,
+      size: { x: tileGrid.tileSize, y: tileGrid.tileSize },
+      direction: 'up',
+      lives: 3,
+    }),
   )
 
-  for (const result of results) {
-    effectManager.add(result.explosion)
-
-    if (result.tankDestroyed && result.tank instanceof EnemyTank) {
-      const powerUp = createPowerUpDrop(result.tank)
-
-      if (powerUp) {
-        powerUpManager.add(powerUp)
-      }
-    }
-  }
-
-  bulletManager.pruneDead()
-  tankManager.pruneDead()
-}
-
-const resolvePlayerPowerUpPickups = (): void => {
-  resolvePowerUpPickups(getActivePowerUps(), playerTank, powerUpEffects)
-  powerUpManager.pruneDead()
-}
-
-const emitSceneChangeEvents = (): void => {
-  if (latestSceneChangeEvent) {
-    return
-  }
-
-  latestSceneChangeEvent = levelSceneChangeEmitter.update({
-    waveExhausted: enemySpawner.isExhausted,
-    activeEnemyCount: getActiveEnemyCount(),
-    playerLives: playerTank.lives,
-    baseDestroyed: gameState.baseDestroyed,
+  const getPlayerShooter = () => ({
+    position: playerTank.position,
+    size: playerTank.size,
+    direction: playerTank.direction,
+    owner: playerTank.faction,
   })
-}
 
-const getSceneStatusText = (): string => {
-  if (!latestSceneChangeEvent) {
-    return 'Playing'
-  }
+  const getActiveBullets = (): Bullet[] =>
+    bulletManager
+      .getAll()
+      .filter((entity): entity is Bullet => entity instanceof Bullet)
 
-  if (latestSceneChangeEvent.target === 'next-level') {
-    return `Next level: ${latestSceneChangeEvent.nextLevelIndex + 1}`
-  }
+  const getActivePowerUps = (): PowerUp[] =>
+    powerUpManager
+      .getAll()
+      .filter((entity): entity is PowerUp => entity instanceof PowerUp)
 
-  return `Game over: ${latestSceneChangeEvent.reason}`
-}
+  const getActiveTanks = (): Tank[] =>
+    tankManager
+      .getAll()
+      .filter((entity): entity is Tank => entity instanceof Tank)
 
-const getPowerUpStatusText = (): string =>
-  [
-    isBaseShieldActive(powerUpEffects) ? 'Shield' : null,
-    isWeaponUpgraded(powerUpEffects)
-      ? `Weapon ${powerUpEffects.weaponLevel}`
-      : null,
-    areEnemiesFrozen(powerUpEffects) ? 'Freeze' : null,
-  ]
-    .filter((value): value is string => value !== null)
-    .join(', ') || 'None'
+  const getActiveEnemies = (): EnemyTank[] =>
+    tankManager
+      .getAll()
+      .filter((entity): entity is EnemyTank => entity instanceof EnemyTank)
 
-const bootScene: Scene = {
-  enter: () => undefined,
-  exit: () => undefined,
-  update: (dt: number): void => {
-    if (latestSceneChangeEvent) {
-      effectManager.update(dt)
-      updatePowerUpEffects(powerUpEffects, dt)
+  const getActiveEnemyCount = (): number =>
+    getActiveEnemies().filter((enemy) => enemy.alive).length
+
+  const spawnEnemies = (dt: number): void => {
+    const result = enemySpawner.update(dt, getActiveEnemies())
+
+    if (!result) {
       return
     }
 
-    spawnEnemies(dt)
-    updatePowerUpEffects(powerUpEffects, dt)
-    playerTank.updateFromInput(dt, input, bootTileGrid)
-    playerFiringController.update(dt)
+    tankManager.add(result.enemy)
+    effectManager.add(result.flash)
+  }
 
-    const bullet = playerTank.alive
-      ? playerFiringController.tryFire(
-          input,
-          getActiveBullets(),
-          getPlayerShooter(),
-          isWeaponUpgraded(powerUpEffects)
-            ? { maxActiveBullets: 2, bulletSpeed: 420 }
-            : undefined,
-        )
-      : null
-
-    if (bullet) {
-      bulletManager.add(bullet)
+  const pruneBulletsOutsideGrid = (): void => {
+    for (const bullet of getActiveBullets()) {
+      if (bullet.isOutsideBounds(tileGrid.worldWidth, tileGrid.worldHeight)) {
+        bullet.alive = false
+      }
     }
 
-    bulletManager.update(dt)
-    resolveBulletTerrainCollisions()
-    resolveBulletTankHits()
-    resolvePlayerPowerUpPickups()
-    pruneBulletsOutsideGrid()
-    effectManager.update(dt)
-    emitSceneChangeEvents()
-  },
-  render: (ctx: CanvasRenderingContext2D, fps: number): void => {
-    clearScreen(ctx)
-    renderTileGrid(ctx, bootTileGrid, { layer: TileRenderLayer.Base })
-    tankManager.render(ctx)
-    powerUpManager.render(ctx)
-    bulletManager.render(ctx)
-    effectManager.render(ctx)
-    renderTileGrid(ctx, bootTileGrid, { layer: TileRenderLayer.Overlay })
+    bulletManager.pruneDead()
+  }
 
-    ctx.save()
-    ctx.fillStyle = '#f9fafb'
-    ctx.font = '14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
-    ctx.textBaseline = 'top'
-    ctx.fillText(`FPS: ${fps}`, 12, 12)
-    ctx.fillText(`Lives: ${playerTank.lives}`, 12, 32)
-    ctx.fillText(`Score: ${gameState.score}`, 12, 52)
-    ctx.fillText(`Wave: ${enemySpawner.remainingEnemies}`, 12, 72)
-    ctx.fillText(`Scene: ${getSceneStatusText()}`, 12, 92)
-    ctx.fillText(`Power: ${getPowerUpStatusText()}`, 12, 112)
-    ctx.restore()
-  },
+  const resolveBulletTerrainCollisions = (): void => {
+    for (const bullet of getActiveBullets()) {
+      const result = resolveBulletTerrainCollision(bullet, tileGrid)
+
+      if (result.baseDestroyed) {
+        if (isBaseShieldActive(powerUpEffects) && result.tile) {
+          tileGrid.set(result.tile.x, result.tile.y, TileType.Base)
+        } else {
+          gameState.baseDestroyed = true
+        }
+      }
+    }
+
+    bulletManager.pruneDead()
+  }
+
+  const resolveBulletTankHits = (): void => {
+    const results = resolveBulletTankCollisions(
+      getActiveBullets(),
+      getActiveTanks(),
+      gameState,
+    )
+
+    for (const result of results) {
+      effectManager.add(result.explosion)
+
+      if (result.tankDestroyed && result.tank instanceof EnemyTank) {
+        const powerUp = createPowerUpDrop(result.tank)
+
+        if (powerUp) {
+          powerUpManager.add(powerUp)
+        }
+      }
+    }
+
+    bulletManager.pruneDead()
+    tankManager.pruneDead()
+  }
+
+  const resolvePlayerPowerUpPickups = (): void => {
+    resolvePowerUpPickups(getActivePowerUps(), playerTank, powerUpEffects)
+    powerUpManager.pruneDead()
+  }
+
+  const emitSceneChangeEvent = (): SceneChangeEvent | null => {
+    if (latestSceneChangeEvent) {
+      return null
+    }
+
+    latestSceneChangeEvent = levelSceneChangeEmitter.update({
+      waveExhausted: enemySpawner.isExhausted,
+      activeEnemyCount: getActiveEnemyCount(),
+      playerLives: playerTank.lives,
+      baseDestroyed: gameState.baseDestroyed,
+    })
+
+    return latestSceneChangeEvent
+  }
+
+  const getSceneStatusText = (): string => {
+    if (!latestSceneChangeEvent) {
+      return 'Playing'
+    }
+
+    if (latestSceneChangeEvent.target === 'next-level') {
+      return `Next level: ${latestSceneChangeEvent.nextLevelIndex + 1}`
+    }
+
+    return `Game over: ${latestSceneChangeEvent.reason}`
+  }
+
+  const getPowerUpStatusText = (): string =>
+    [
+      isBaseShieldActive(powerUpEffects) ? 'Shield' : null,
+      isWeaponUpgraded(powerUpEffects)
+        ? `Weapon ${powerUpEffects.weaponLevel}`
+        : null,
+      areEnemiesFrozen(powerUpEffects) ? 'Freeze' : null,
+    ]
+      .filter((value): value is string => value !== null)
+      .join(', ') || 'None'
+
+  const handleSceneChangeEvent = (event: SceneChangeEvent): void => {
+    if (event.target === 'game-over') {
+      showGameOverScene(gameState.score)
+      return
+    }
+
+    if (event.nextLevelIndex >= STARTER_LEVELS.length) {
+      showVictoryScene(gameState.score)
+      return
+    }
+
+    sceneManager.setScene(
+      createGameScene(event.nextLevelIndex, gameState.score),
+    )
+  }
+
+  const gameScene: Scene = {
+    enter: () => undefined,
+    exit: () => undefined,
+    update: (dt: number): void => {
+      if (
+        input.wasPressed('KeyP') ||
+        input.wasPressed('p') ||
+        input.wasPressed('P')
+      ) {
+        showPauseScene(gameScene)
+        return
+      }
+
+      if (latestSceneChangeEvent) {
+        effectManager.update(dt)
+        updatePowerUpEffects(powerUpEffects, dt)
+        return
+      }
+
+      spawnEnemies(dt)
+      updatePowerUpEffects(powerUpEffects, dt)
+      playerTank.updateFromInput(dt, input, tileGrid)
+      playerFiringController.update(dt)
+
+      const bullet = playerTank.alive
+        ? playerFiringController.tryFire(
+            input,
+            getActiveBullets(),
+            getPlayerShooter(),
+            isWeaponUpgraded(powerUpEffects)
+              ? { maxActiveBullets: 2, bulletSpeed: 420 }
+              : undefined,
+          )
+        : null
+
+      if (bullet) {
+        bulletManager.add(bullet)
+      }
+
+      bulletManager.update(dt)
+      resolveBulletTerrainCollisions()
+      resolveBulletTankHits()
+      resolvePlayerPowerUpPickups()
+      pruneBulletsOutsideGrid()
+      effectManager.update(dt)
+
+      const sceneChangeEvent = emitSceneChangeEvent()
+
+      if (sceneChangeEvent) {
+        handleSceneChangeEvent(sceneChangeEvent)
+      }
+    },
+    render: (ctx: CanvasRenderingContext2D, fps: number): void => {
+      clearScreen(ctx)
+      renderTileGrid(ctx, tileGrid, { layer: TileRenderLayer.Base })
+      tankManager.render(ctx)
+      powerUpManager.render(ctx)
+      bulletManager.render(ctx)
+      effectManager.render(ctx)
+      renderTileGrid(ctx, tileGrid, { layer: TileRenderLayer.Overlay })
+
+      ctx.save()
+      ctx.fillStyle = '#f9fafb'
+      ctx.font = '14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
+      ctx.textBaseline = 'top'
+      ctx.fillText(`FPS: ${fps}`, 12, 12)
+      ctx.fillText(`Lives: ${playerTank.lives}`, 12, 32)
+      ctx.fillText(`Score: ${gameState.score}`, 12, 52)
+      ctx.fillText(`Level: ${levelIndex + 1}`, 12, 72)
+      ctx.fillText(`Wave: ${enemySpawner.remainingEnemies}`, 12, 92)
+      ctx.fillText(`Scene: ${getSceneStatusText()}`, 12, 112)
+      ctx.fillText(`Power: ${getPowerUpStatusText()}`, 12, 132)
+      ctx.restore()
+    },
+  }
+
+  return gameScene
 }
 
 const resizeCanvas = (): void => {
@@ -297,15 +370,57 @@ const resizeCanvas = (): void => {
 }
 
 const sceneManager = new SceneManager()
-const titleScene = new TitleScene({
-  input,
-  storage: getTitleStorage(),
-  onStart: () => {
-    sceneManager.setScene(bootScene)
-  },
-})
 
-sceneManager.setScene(titleScene)
+const showTitleScene = (): void => {
+  sceneManager.setScene(
+    new TitleScene({
+      input,
+      storage: getTitleStorage(),
+      onStart: () => {
+        sceneManager.setScene(createGameScene(0))
+      },
+    }),
+  )
+}
+
+const showPauseScene = (gameScene: Scene): void => {
+  sceneManager.setScene(
+    new PauseScene({
+      input,
+      gameScene,
+      onResume: () => {
+        sceneManager.setScene(gameScene)
+      },
+      onReturnToTitle: showTitleScene,
+    }),
+  )
+}
+
+const showGameOverScene = (finalScore: number): void => {
+  persistHighScore(finalScore)
+  sceneManager.setScene(
+    new ResultScene({
+      input,
+      title: 'GAME OVER',
+      finalScore,
+      onReturnToTitle: showTitleScene,
+    }),
+  )
+}
+
+const showVictoryScene = (finalScore: number): void => {
+  persistHighScore(finalScore)
+  sceneManager.setScene(
+    new ResultScene({
+      input,
+      title: 'VICTORY',
+      finalScore,
+      onReturnToTitle: showTitleScene,
+    }),
+  )
+}
+
+showTitleScene()
 
 const gameLoop = new GameLoop(context, {
   update: (dt: number): void => {

@@ -6,6 +6,7 @@ import { SceneManager } from './core/SceneManager'
 import { Bullet } from './entities/Bullet'
 import { EnemyTank } from './entities/EnemyTank'
 import { EntityManager } from './entities/EntityManager'
+import { PlayerTank } from './entities/PlayerTank'
 import { PowerUp } from './entities/PowerUp'
 import { Tank } from './entities/Tank'
 import { BulletFiringController } from './game/BulletFiringController'
@@ -71,10 +72,9 @@ const enemySpawner = new EnemySpawner({
   wave: bootLevel.wave,
 })
 const playerTank = tankManager.add(
-  new Tank({
+  new PlayerTank({
     position: bootLevel.playerSpawn,
     size: { x: bootTileGrid.tileSize, y: bootTileGrid.tileSize },
-    faction: 'player',
     direction: 'up',
     lives: 3,
   }),
@@ -225,6 +225,7 @@ const bootScene: Scene = {
 
     spawnEnemies(dt)
     updatePowerUpEffects(powerUpEffects, dt)
+    playerTank.updateFromInput(dt, input, bootTileGrid)
     playerFiringController.update(dt)
 
     const bullet = playerTank.alive

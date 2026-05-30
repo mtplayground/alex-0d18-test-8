@@ -1,0 +1,33 @@
+Architecture plan for Issue #1: Initialize Vite + TypeScript project
+
+Scope source:
+- GitHub Issue #1 requests a Vite vanilla TypeScript project with package.json,
+  tsconfig.json, vite.config.ts, index.html, a full-window canvas element, and
+  reset CSS.
+- No PRODUCT.md is present in the workspace, so no product brand beyond the
+  repository/issue wording is assumed.
+
+Module structure and file organization:
+- package.json: define Node/Vite scripts for dev, build, and preview.
+- vite.config.ts: keep the initial Vite config minimal unless deployment needs a
+  base path later.
+- tsconfig.json: strict TypeScript settings suitable for browser code.
+- index.html: single app entry point with a root/full-window canvas element.
+- src/main.ts: bootstrap browser behavior and own canvas sizing/setup.
+- src/style.css: reset CSS plus full-viewport layout rules.
+- Future shared types should live under src/types.ts or src/types/ once more
+  than one module consumes them.
+
+Dependencies between issues:
+- Issue #1 is the foundation for all later work. Later sessions should build on
+  the Vite app shell instead of replacing it.
+- Canvas rendering, input handling, and domain modules should depend on the
+  bootstrap created here, not on global inline scripts.
+
+Key design decisions:
+- Use the vanilla-ts Vite template shape to keep the baseline small and explicit.
+- Treat the canvas as the primary application surface from the first commit.
+- Keep styling limited to reset and viewport layout until product requirements
+  define actual visual design.
+- Avoid adding frameworks or rendering libraries during setup unless a later
+  issue explicitly requires one.

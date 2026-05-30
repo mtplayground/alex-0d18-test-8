@@ -1,6 +1,8 @@
 import './style.css'
 import { GameLoop } from './core/GameLoop'
 import { input } from './core/Input'
+import type { Scene } from './core/Scene'
+import { SceneManager } from './core/SceneManager'
 
 const canvas = document.querySelector<HTMLCanvasElement>('#app-canvas')
 
@@ -14,29 +16,31 @@ if (!context) {
   throw new Error('This browser does not support 2D canvas rendering.')
 }
 
-const clearScreen = (): void => {
+const clearScreen = (ctx: CanvasRenderingContext2D): void => {
   const width = canvas.clientWidth
   const height = canvas.clientHeight
 
-  context.clearRect(0, 0, width, height)
-  context.fillStyle = '#111827'
-  context.fillRect(0, 0, width, height)
+  ctx.clearRect(0, 0, width, height)
+  ctx.fillStyle = '#111827'
+  ctx.fillRect(0, 0, width, height)
 }
 
-const update = (dt: number): void => {
-  void dt
-  input.endFrame()
-}
+const bootScene: Scene = {
+  enter: () => undefined,
+  exit: () => undefined,
+  update: (dt: number): void => {
+    void dt
+  },
+  render: (ctx: CanvasRenderingContext2D, fps: number): void => {
+    clearScreen(ctx)
 
-const render = (ctx: CanvasRenderingContext2D, fps: number): void => {
-  clearScreen()
-
-  ctx.save()
-  ctx.fillStyle = '#f9fafb'
-  ctx.font = '14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
-  ctx.textBaseline = 'top'
-  ctx.fillText(`FPS: ${fps}`, 12, 12)
-  ctx.restore()
+    ctx.save()
+    ctx.fillStyle = '#f9fafb'
+    ctx.font = '14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
+    ctx.textBaseline = 'top'
+    ctx.fillText(`FPS: ${fps}`, 12, 12)
+    ctx.restore()
+  },
 }
 
 const resizeCanvas = (): void => {
@@ -52,9 +56,17 @@ const resizeCanvas = (): void => {
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
 }
 
+const sceneManager = new SceneManager()
+sceneManager.setScene(bootScene)
+
 const gameLoop = new GameLoop(context, {
-  update,
-  render,
+  update: (dt: number): void => {
+    sceneManager.update(dt)
+    input.endFrame()
+  },
+  render: (ctx: CanvasRenderingContext2D, fps: number): void => {
+    sceneManager.render(ctx, fps)
+  },
 })
 
 const resizeObserver = new ResizeObserver(resizeCanvas)

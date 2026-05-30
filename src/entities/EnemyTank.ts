@@ -1,4 +1,5 @@
 import type { Direction, Vector2 } from './Entity'
+import type { PowerUpType } from './PowerUp'
 import { Tank } from './Tank'
 
 export type EnemyTankType = 'basic' | 'fast' | 'armored'
@@ -13,6 +14,7 @@ export interface EnemyTankOptions {
   position: Vector2
   size: Vector2
   type?: EnemyTankType
+  powerUpType?: PowerUpType | null
   direction?: Direction
   alive?: boolean
 }
@@ -53,6 +55,7 @@ export const assertEnemyTankType = (value: unknown): EnemyTankType => {
 
 export class EnemyTank extends Tank {
   public readonly type: EnemyTankType
+  public readonly powerUpType: PowerUpType | null
 
   public constructor(options: EnemyTankOptions) {
     const type = assertEnemyTankType(options.type ?? 'basic')
@@ -70,5 +73,6 @@ export class EnemyTank extends Tank {
     })
 
     this.type = type
+    this.powerUpType = options.powerUpType ?? null
   }
 }

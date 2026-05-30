@@ -1,10 +1,12 @@
 import { EnemyTank, type EnemyTankType } from '../entities/EnemyTank'
 import type { Vector2 } from '../entities/Entity'
+import type { PowerUpType } from '../entities/PowerUp'
 import { SpawnFlash } from '../entities/SpawnFlash'
 
 export interface EnemyWaveEntry {
   type: EnemyTankType
   count?: number
+  powerUpType?: PowerUpType | null
 }
 
 export interface EnemySpawnerOptions {
@@ -56,15 +58,23 @@ const assertPositiveFinite = (name: string, value: number): void => {
   }
 }
 
-const expandWave = (wave: readonly EnemyWaveEntry[]): EnemyTankType[] => {
-  const queue: EnemyTankType[] = []
+interface EnemySpawnSpec {
+  type: EnemyTankType
+  powerUpType: PowerUpType | null
+}
+
+const expandWave = (wave: readonly EnemyWaveEntry[]): EnemySpawnSpec[] => {
+  const queue: EnemySpawnSpec[] = []
 
   for (const entry of wave) {
     const count = entry.count ?? 1
     assertPositiveInteger('Enemy wave entry count', count)
 
     for (let index = 0; index < count; index += 1) {
-      queue.push(entry.type)
+      queue.push({
+        type: entry.type,
+        powerUpType: entry.powerUpType ?? null,
+      })
     }
   }
 
@@ -77,7 +87,7 @@ export class EnemySpawner {
   public readonly maxActiveEnemies: number
   public readonly spawnCooldownSeconds: number
   public readonly flashDurationSeconds: number
-  private readonly queue: EnemyTankType[]
+  private readonly queue: EnemySpawnSpec[]
   private spawnPointIndex = 0
   private cooldownRemainingSeconds = 0
 
@@ -140,9 +150,9 @@ export class EnemySpawner {
       return null
     }
 
-    const type = this.queue.shift()
+    const spec = this.queue.shift()
 
-    if (!type) {
+    if (!spec) {
       return null
     }
 
@@ -150,7 +160,8 @@ export class EnemySpawner {
     const enemy = new EnemyTank({
       position: spawnPoint,
       size: this.enemySize,
-      type,
+      type: spec.type,
+      powerUpType: spec.powerUpType,
       direction: 'down',
     })
     const flash = new SpawnFlash({

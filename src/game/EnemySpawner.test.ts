@@ -43,6 +43,17 @@ describe('EnemySpawner', () => {
     expect(spawner.remainingEnemies).toBe(1)
   })
 
+  it('passes power-up flags from wave entries to spawned enemies', () => {
+    const spawner = createSpawner({
+      wave: [{ type: 'fast', powerUpType: 'freeze-enemies' }],
+    })
+
+    const result = spawner.update(0, [])
+
+    expect(result?.enemy.type).toBe('fast')
+    expect(result?.enemy.powerUpType).toBe('freeze-enemies')
+  })
+
   it('caps concurrent active enemies and keeps the wave queued', () => {
     const spawner = createSpawner({ maxActiveEnemies: 1 })
     const activeEnemy = new EnemyTank({

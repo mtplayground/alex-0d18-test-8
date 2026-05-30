@@ -90,6 +90,31 @@ describe('BulletFiringController', () => {
     ).not.toBeNull()
   })
 
+  it('allows temporary firing overrides', () => {
+    const controller = new BulletFiringController({
+      maxActiveBullets: 1,
+      bulletSpeed: 100,
+      reloadSeconds: 0,
+    })
+    const activeBullet = new Bullet({
+      position: { x: 0, y: 0 },
+      direction: 'up',
+      owner: 'player',
+    })
+
+    const bullet = controller.tryFire(
+      pressedInput(true),
+      [activeBullet],
+      shooter,
+      {
+        maxActiveBullets: 2,
+        bulletSpeed: 200,
+      },
+    )
+
+    expect(bullet?.speed).toBe(200)
+  })
+
   it('rejects invalid options and update deltas', () => {
     expect(() => new BulletFiringController({ maxActiveBullets: -1 })).toThrow(
       'Bullet max active bullet count must be a non-negative integer.',

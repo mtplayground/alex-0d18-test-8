@@ -6,6 +6,7 @@ import { SceneManager } from './core/SceneManager'
 import { Bullet } from './entities/Bullet'
 import { EnemyTank } from './entities/EnemyTank'
 import { EntityManager } from './entities/EntityManager'
+import { PowerUp } from './entities/PowerUp'
 import { Tank } from './entities/Tank'
 import { BulletFiringController } from './game/BulletFiringController'
 import { resolveBulletTankCollisions } from './game/BulletTankCollision'
@@ -15,6 +16,15 @@ import {
   LevelSceneChangeEmitter,
   type SceneChangeEvent,
 } from './game/LevelState'
+import {
+  areEnemiesFrozen,
+  createPowerUpDrop,
+  createPowerUpEffectState,
+  isBaseShieldActive,
+  isWeaponUpgraded,
+  resolvePowerUpPickups,
+  updatePowerUpEffects,
+} from './game/PowerUps'
 import { BrickQuadrant } from './tiles/BrickDamage'
 import { TileGrid } from './tiles/TileGrid'
 import { TileType } from './tiles/TileTypes'
@@ -74,8 +84,10 @@ const bootTileGrid = createBootTileGrid()
 const bulletManager = new EntityManager()
 const tankManager = new EntityManager()
 const effectManager = new EntityManager()
+const powerUpManager = new EntityManager()
 const playerFiringController = new BulletFiringController()
 const levelSceneChangeEmitter = new LevelSceneChangeEmitter()
+const powerUpEffects = createPowerUpEffectState()
 const gameState = {
   score: 0,
   baseDestroyed: false,
@@ -89,7 +101,12 @@ const topSpawnPoints = [
 const enemySpawner = new EnemySpawner({
   spawnPoints: topSpawnPoints,
   enemySize: { x: bootTileGrid.tileSize, y: bootTileGrid.tileSize },
-  wave: [{ type: 'basic', count: 2 }, { type: 'fast' }, { type: 'armored' }],
+  wave: [
+    { type: 'basic', powerUpType: 'extra-life' },
+    { type: 'basic', powerUpType: 'base-shield' },
+    { type: 'fast', powerUpType: 'freeze-enemies' },
+    { type: 'armored', powerUpType: 'weapon-upgrade' },
+  ],
 })
 const playerTank = tankManager.add(
   new Tank({
@@ -112,6 +129,11 @@ const getActiveBullets = (): Bullet[] =>
   bulletManager
     .getAll()
     .filter((entity): entity is Bullet => entity instanceof Bullet)
+
+const getActivePowerUps = (): PowerUp[] =>
+  powerUpManager
+    .getAll()
+    .filter((entity): entity is PowerUp => entity instanceof PowerUp)
 
 const getActiveTanks = (): Tank[] =>
   tankManager
@@ -154,7 +176,11 @@ const resolveBulletTerrainCollisions = (): void => {
     const result = resolveBulletTerrainCollision(bullet, bootTileGrid)
 
     if (result.baseDestroyed) {
-      gameState.baseDestroyed = true
+      if (isBaseShieldActive(powerUpEffects) && result.tile) {
+        bootTileGrid.set(result.tile.x, result.tile.y, TileType.Base)
+      } else {
+        gameState.baseDestroyed = true
+      }
     }
   }
 
@@ -170,10 +196,23 @@ const resolveBulletTankHits = (): void => {
 
   for (const result of results) {
     effectManager.add(result.explosion)
+
+    if (result.tankDestroyed && result.tank instanceof EnemyTank) {
+      const powerUp = createPowerUpDrop(result.tank)
+
+      if (powerUp) {
+        powerUpManager.add(powerUp)
+      }
+    }
   }
 
   bulletManager.pruneDead()
   tankManager.pruneDead()
+}
+
+const resolvePlayerPowerUpPickups = (): void => {
+  resolvePowerUpPickups(getActivePowerUps(), playerTank, powerUpEffects)
+  powerUpManager.pruneDead()
 }
 
 const emitSceneChangeEvents = (): void => {
@@ -201,16 +240,29 @@ const getSceneStatusText = (): string => {
   return `Game over: ${latestSceneChangeEvent.reason}`
 }
 
+const getPowerUpStatusText = (): string =>
+  [
+    isBaseShieldActive(powerUpEffects) ? 'Shield' : null,
+    isWeaponUpgraded(powerUpEffects)
+      ? `Weapon ${powerUpEffects.weaponLevel}`
+      : null,
+    areEnemiesFrozen(powerUpEffects) ? 'Freeze' : null,
+  ]
+    .filter((value): value is string => value !== null)
+    .join(', ') || 'None'
+
 const bootScene: Scene = {
   enter: () => undefined,
   exit: () => undefined,
   update: (dt: number): void => {
     if (latestSceneChangeEvent) {
       effectManager.update(dt)
+      updatePowerUpEffects(powerUpEffects, dt)
       return
     }
 
     spawnEnemies(dt)
+    updatePowerUpEffects(powerUpEffects, dt)
     playerFiringController.update(dt)
 
     const bullet = playerTank.alive
@@ -218,6 +270,9 @@ const bootScene: Scene = {
           input,
           getActiveBullets(),
           getPlayerShooter(),
+          isWeaponUpgraded(powerUpEffects)
+            ? { maxActiveBullets: 2, bulletSpeed: 420 }
+            : undefined,
         )
       : null
 
@@ -228,6 +283,7 @@ const bootScene: Scene = {
     bulletManager.update(dt)
     resolveBulletTerrainCollisions()
     resolveBulletTankHits()
+    resolvePlayerPowerUpPickups()
     pruneBulletsOutsideGrid()
     effectManager.update(dt)
     emitSceneChangeEvents()
@@ -236,6 +292,7 @@ const bootScene: Scene = {
     clearScreen(ctx)
     renderTileGrid(ctx, bootTileGrid, { layer: TileRenderLayer.Base })
     tankManager.render(ctx)
+    powerUpManager.render(ctx)
     bulletManager.render(ctx)
     effectManager.render(ctx)
     renderTileGrid(ctx, bootTileGrid, { layer: TileRenderLayer.Overlay })
@@ -249,6 +306,7 @@ const bootScene: Scene = {
     ctx.fillText(`Score: ${gameState.score}`, 12, 52)
     ctx.fillText(`Wave: ${enemySpawner.remainingEnemies}`, 12, 72)
     ctx.fillText(`Scene: ${getSceneStatusText()}`, 12, 92)
+    ctx.fillText(`Power: ${getPowerUpStatusText()}`, 12, 112)
     ctx.restore()
   },
 }

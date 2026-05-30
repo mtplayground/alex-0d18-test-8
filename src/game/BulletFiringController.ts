@@ -20,6 +20,11 @@ export interface BulletFiringControllerOptions {
   bulletSize?: Vector2
 }
 
+export interface BulletFireOverrides {
+  maxActiveBullets?: number
+  bulletSpeed?: number
+}
+
 const DEFAULT_TRIGGER_KEY = 'Space'
 const DEFAULT_RELOAD_SECONDS = 0.35
 const DEFAULT_MAX_ACTIVE_BULLETS = 1
@@ -109,15 +114,19 @@ export class BulletFiringController {
   public canFire(
     activeBullets: readonly Bullet[],
     shooter: ShooterState,
+    overrides: BulletFireOverrides = {},
   ): boolean {
     if (this.reloadRemaining > 0) {
       return false
     }
 
+    const maxActiveBullets = overrides.maxActiveBullets ?? this.maxActiveBullets
+    assertNonNegativeInteger('Bullet max active bullet count', maxActiveBullets)
+
     return (
       activeBullets.filter(
         (bullet) => bullet.alive && bullet.owner === shooter.owner,
-      ).length < this.maxActiveBullets
+      ).length < maxActiveBullets
     )
   }
 
@@ -125,20 +134,24 @@ export class BulletFiringController {
     input: FireInput,
     activeBullets: readonly Bullet[],
     shooter: ShooterState,
+    overrides: BulletFireOverrides = {},
   ): Bullet | null {
     if (
       !input.wasPressed(this.triggerKey) ||
-      !this.canFire(activeBullets, shooter)
+      !this.canFire(activeBullets, shooter, overrides)
     ) {
       return null
     }
+
+    const bulletSpeed = overrides.bulletSpeed ?? this.bulletSpeed
+    assertFinitePositive('Bullet speed', bulletSpeed)
 
     const bullet = new Bullet({
       position: getMuzzlePosition(shooter, this.bulletSize),
       size: this.bulletSize,
       direction: shooter.direction,
       owner: shooter.owner,
-      speed: this.bulletSpeed,
+      speed: bulletSpeed,
     })
 
     this.reloadRemaining = this.reloadSeconds

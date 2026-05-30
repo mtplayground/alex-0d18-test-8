@@ -23,6 +23,7 @@ describe('EnemyTank', () => {
     expect(tank.speed).toBe(definition.speed)
     expect(tank.hitPoints).toBe(definition.hitPoints)
     expect(tank.scoreValue).toBe(definition.scoreValue)
+    expect(tank.powerUpType).toBeNull()
   })
 
   it('applies fast and armored variant stats', () => {
@@ -35,6 +36,15 @@ describe('EnemyTank', () => {
     expect(armored.speed).toBe(ENEMY_TANK_DEFINITIONS.armored.speed)
     expect(armored.hitPoints).toBe(ENEMY_TANK_DEFINITIONS.armored.hitPoints)
     expect(armored.scoreValue).toBe(ENEMY_TANK_DEFINITIONS.armored.scoreValue)
+  })
+
+  it('can be flagged to drop a power-up', () => {
+    const tank = new EnemyTank({
+      ...baseOptions,
+      powerUpType: 'extra-life',
+    })
+
+    expect(tank.powerUpType).toBe('extra-life')
   })
 
   it('exposes type guards and rejects invalid types', () => {

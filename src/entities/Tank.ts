@@ -13,6 +13,7 @@ export interface TankOptions {
   size: Vector2
   faction: TankFaction
   direction?: Direction
+  speed?: number
   hitPoints?: number
   lives?: number
   scoreValue?: number
@@ -37,13 +38,21 @@ const assertNonNegativeInteger = (name: string, value: number): void => {
   }
 }
 
+const assertNonNegativeFinite = (name: string, value: number): void => {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`${name} must be a finite, non-negative number.`)
+  }
+}
+
 export class Tank extends Entity {
   public readonly faction: TankFaction
+  public readonly speed: number
   public hitPoints: number
   public lives: number
   public readonly scoreValue: number
 
   public constructor(options: TankOptions) {
+    const speed = options.speed ?? 0
     const hitPoints = options.hitPoints ?? 1
     const lives = options.lives ?? 1
     const scoreValue = options.scoreValue ?? 0
@@ -54,12 +63,14 @@ export class Tank extends Entity {
       alive: options.alive,
     }
 
+    assertNonNegativeFinite('Tank speed', speed)
     assertPositiveInteger('Tank hit points', hitPoints)
     assertPositiveInteger('Tank lives', lives)
     assertNonNegativeInteger('Tank score value', scoreValue)
     super(entityOptions)
 
     this.faction = options.faction
+    this.speed = speed
     this.hitPoints = hitPoints
     this.lives = lives
     this.scoreValue = scoreValue

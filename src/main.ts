@@ -5,7 +5,9 @@ import type { Scene } from './core/Scene'
 import { SceneManager } from './core/SceneManager'
 import { Bullet } from './entities/Bullet'
 import { EntityManager } from './entities/EntityManager'
+import { Tank } from './entities/Tank'
 import { BulletFiringController } from './game/BulletFiringController'
+import { resolveBulletTankCollisions } from './game/BulletTankCollision'
 import { resolveBulletTerrainCollision } from './game/BulletTerrainCollision'
 import { BrickQuadrant } from './tiles/BrickDamage'
 import { TileGrid } from './tiles/TileGrid'
@@ -64,18 +66,47 @@ const createBootTileGrid = (): TileGrid => {
 
 const bootTileGrid = createBootTileGrid()
 const bulletManager = new EntityManager()
+const tankManager = new EntityManager()
+const effectManager = new EntityManager()
 const playerFiringController = new BulletFiringController()
-const playerShooter = {
-  position: { x: 6 * bootTileGrid.tileSize, y: 9 * bootTileGrid.tileSize },
-  size: { x: bootTileGrid.tileSize, y: bootTileGrid.tileSize },
-  direction: 'up' as const,
-  owner: 'player' as const,
+const gameState = {
+  score: 0,
 }
+const playerTank = tankManager.add(
+  new Tank({
+    position: { x: 6 * bootTileGrid.tileSize, y: 9 * bootTileGrid.tileSize },
+    size: { x: bootTileGrid.tileSize, y: bootTileGrid.tileSize },
+    faction: 'player',
+    direction: 'up',
+    lives: 3,
+  }),
+)
+tankManager.add(
+  new Tank({
+    position: { x: 6 * bootTileGrid.tileSize, y: 5 * bootTileGrid.tileSize },
+    size: { x: bootTileGrid.tileSize, y: bootTileGrid.tileSize },
+    faction: 'enemy',
+    direction: 'down',
+    scoreValue: 100,
+  }),
+)
+
+const getPlayerShooter = () => ({
+  position: playerTank.position,
+  size: playerTank.size,
+  direction: playerTank.direction,
+  owner: playerTank.faction,
+})
 
 const getActiveBullets = (): Bullet[] =>
   bulletManager
     .getAll()
     .filter((entity): entity is Bullet => entity instanceof Bullet)
+
+const getActiveTanks = (): Tank[] =>
+  tankManager
+    .getAll()
+    .filter((entity): entity is Tank => entity instanceof Tank)
 
 const pruneBulletsOutsideGrid = (): void => {
   for (const bullet of getActiveBullets()) {
@@ -97,23 +128,19 @@ const resolveBulletTerrainCollisions = (): void => {
   bulletManager.pruneDead()
 }
 
-const renderPlayerShooter = (ctx: CanvasRenderingContext2D): void => {
-  ctx.save()
-  ctx.fillStyle = '#38bdf8'
-  ctx.fillRect(
-    playerShooter.position.x,
-    playerShooter.position.y,
-    playerShooter.size.x,
-    playerShooter.size.y,
+const resolveBulletTankHits = (): void => {
+  const results = resolveBulletTankCollisions(
+    getActiveBullets(),
+    getActiveTanks(),
+    gameState,
   )
-  ctx.fillStyle = '#e0f2fe'
-  ctx.fillRect(
-    playerShooter.position.x + playerShooter.size.x / 2 - 3,
-    playerShooter.position.y - 8,
-    6,
-    12,
-  )
-  ctx.restore()
+
+  for (const result of results) {
+    effectManager.add(result.explosion)
+  }
+
+  bulletManager.pruneDead()
+  tankManager.pruneDead()
 }
 
 const bootScene: Scene = {
@@ -122,11 +149,13 @@ const bootScene: Scene = {
   update: (dt: number): void => {
     playerFiringController.update(dt)
 
-    const bullet = playerFiringController.tryFire(
-      input,
-      getActiveBullets(),
-      playerShooter,
-    )
+    const bullet = playerTank.alive
+      ? playerFiringController.tryFire(
+          input,
+          getActiveBullets(),
+          getPlayerShooter(),
+        )
+      : null
 
     if (bullet) {
       bulletManager.add(bullet)
@@ -134,13 +163,16 @@ const bootScene: Scene = {
 
     bulletManager.update(dt)
     resolveBulletTerrainCollisions()
+    resolveBulletTankHits()
     pruneBulletsOutsideGrid()
+    effectManager.update(dt)
   },
   render: (ctx: CanvasRenderingContext2D, fps: number): void => {
     clearScreen(ctx)
     renderTileGrid(ctx, bootTileGrid, { layer: TileRenderLayer.Base })
-    renderPlayerShooter(ctx)
+    tankManager.render(ctx)
     bulletManager.render(ctx)
+    effectManager.render(ctx)
     renderTileGrid(ctx, bootTileGrid, { layer: TileRenderLayer.Overlay })
 
     ctx.save()
@@ -148,6 +180,8 @@ const bootScene: Scene = {
     ctx.font = '14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
     ctx.textBaseline = 'top'
     ctx.fillText(`FPS: ${fps}`, 12, 12)
+    ctx.fillText(`Lives: ${playerTank.lives}`, 12, 32)
+    ctx.fillText(`Score: ${gameState.score}`, 12, 52)
     ctx.restore()
   },
 }

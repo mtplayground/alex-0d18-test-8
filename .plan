@@ -1,33 +1,95 @@
-Architecture plan for Issue #1: Initialize Vite + TypeScript project
+Architecture plan for Issues #3-#12: alex-0d18-test-8 canvas game foundation
 
-Scope source:
-- GitHub Issue #1 requests a Vite vanilla TypeScript project with package.json,
-  tsconfig.json, vite.config.ts, index.html, a full-window canvas element, and
-  reset CSS.
-- No PRODUCT.md is present in the workspace, so no product brand beyond the
-  repository/issue wording is assumed.
+Current foundation:
+- The app is a minimal Vite + TypeScript browser project.
+- `index.html` owns the full-window `#app-canvas` element.
+- `src/main.ts` currently validates the canvas, configures the 2D context, handles
+  device-pixel-ratio resizing, and renders a dark baseline background.
+- The product name is `alex-0d18-test-8` per PRODUCT.md; do not invent or
+  substitute another brand.
 
 Module structure and file organization:
-- package.json: define Node/Vite scripts for dev, build, and preview.
-- vite.config.ts: keep the initial Vite config minimal unless deployment needs a
-  base path later.
-- tsconfig.json: strict TypeScript settings suitable for browser code.
-- index.html: single app entry point with a root/full-window canvas element.
-- src/main.ts: bootstrap browser behavior and own canvas sizing/setup.
-- src/style.css: reset CSS plus full-viewport layout rules.
-- Future shared types should live under src/types.ts or src/types/ once more
-  than one module consumes them.
+- `src/main.ts`: keep this as the browser bootstrap. It should find the canvas,
+  create core services, start the game loop, and avoid owning gameplay logic.
+- `src/core/GameLoop.ts`: fixed-timestep requestAnimationFrame loop with
+  `update(dt)` and `render(ctx)` callbacks, FPS tracking, pause/stop lifecycle,
+  and canvas clear responsibility until scenes take over.
+- `src/core/Input.ts`: singleton-style keyboard state with `isDown(key)`,
+  `wasPressed(key)`, per-frame edge reset, keydown/keyup listeners, and blur
+  cleanup.
+- `src/core/Scene.ts` and `src/core/SceneManager.ts`: scene interface
+  (`enter`, `exit`, `update`, `render`) plus active-scene swap behavior.
+- `src/entities/Entity.ts`: base entity shape/class with position, size,
+  velocity, direction, alive flag, `update(dt)`, and `render(ctx)`.
+- `src/entities/EntityManager.ts`: add/remove/iterate entities, update/render
+  ordering, and dead-entity pruning.
+- `src/physics/aabb.ts`: pure AABB helpers for overlap, point-in-box, and
+  box-vs-box-list queries.
+- `src/assets/AssetLoader.ts`: async image loading registry that resolves after
+  all requested assets are ready and exposes typed lookup.
+- `src/rendering/SpriteRenderer.ts`: spritesheet tile drawing helper with
+  colored-rectangle fallback while art is absent.
+- `src/tiles/TileTypes.ts`: `TileType` enum or string-literal union for Empty,
+  Brick, Steel, Water, Grass, Ice, and Base plus shared tile constants.
+- `src/tiles/TileGrid.ts`: width/height, tile size, `get(x,y)`, `set(x,y,type)`,
+  bounds handling, and world-coordinate/grid-coordinate conversion.
+- `src/tiles/BrickDamage.ts`: per-brick quadrant state and
+  `damageQuadrant(...)` behavior; may live inside `TileGrid` if the state is
+  tile-local and the API stays small.
+- `src/tiles/renderTileGrid.ts`: render all tile types to canvas, including
+  partial brick quadrants and render-order metadata for grass overlay.
+- `src/types/`: introduce only when shared types outgrow the owning modules.
+- Tests should sit next to source as `*.test.ts` or under `src/__tests__/`,
+  following whatever convention Issue #3 establishes.
 
-Dependencies between issues:
-- Issue #1 is the foundation for all later work. Later sessions should build on
-  the Vite app shell instead of replacing it.
-- Canvas rendering, input handling, and domain modules should depend on the
-  bootstrap created here, not on global inline scripts.
+Shared types:
+- Use a small `Vector2` type for positions, sizes, and velocities:
+  `{ x: number; y: number }`.
+- Use an `AABB` type with `{ x: number; y: number; width: number; height: number }`
+  and keep collision helpers independent from canvas or entity classes.
+- Use a `Direction` union (`'up' | 'down' | 'left' | 'right'`) for entities.
+- Treat `dt` as seconds across update APIs. Fixed-step constants should be named
+  in seconds to avoid mixing milliseconds and seconds.
+- Keep grid coordinates integer tile indices and world coordinates pixel-based.
+
+Issue dependencies and implementation order:
+- #3 Add ESLint, Prettier, and Vitest configuration. This should happen before
+  broad module work so future issues inherit consistent formatting, linting, and
+  a working `npm test` script.
+- #4 Build the core game loop skeleton. Depends on the Vite/canvas app shell and
+  provides the runtime hook that later input, scenes, entities, and rendering use.
+- #5 Implement keyboard input handler. Depends on the loop so `wasPressed` can be
+  cleared once per frame.
+- #6 Implement scene manager. Depends on the loop and should be wired as the
+  loop's update/render target.
+- #7 Implement entity base class and entity manager. Depends on the loop and
+  should remain scene-agnostic so any scene can own an EntityManager.
+- #8 Implement AABB collision detection. Depends on shared position/box types
+  from the entity work but should stay pure and unit-tested.
+- #9 Implement asset loader and sprite renderer. Depends on the Vite/browser
+  setup; renderer should work with loaded images or fallback rectangles.
+- #10 Define tile types and tile grid data structure. Depends on shared geometry
+  conventions and should be unit-tested before rendering is added.
+- #11 Implement brick wall sub-tile damage. Depends on tile grid/types and should
+  extend brick state without changing non-brick tile behavior.
+- #12 Render the tile grid to the canvas. Depends on tile types/grid, brick
+  damage, and sprite/fallback rendering. Grass needs a render-order flag so it
+  can draw above tanks/entities when gameplay entities arrive.
 
 Key design decisions:
-- Use the vanilla-ts Vite template shape to keep the baseline small and explicit.
-- Treat the canvas as the primary application surface from the first commit.
-- Keep styling limited to reset and viewport layout until product requirements
-  define actual visual design.
-- Avoid adding frameworks or rendering libraries during setup unless a later
-  issue explicitly requires one.
+- Keep modules small and dependency direction one-way: core loop and input at
+  the bottom, scenes compose entities/tiles/assets, rendering helpers do not
+  own game state.
+- Prefer pure functions for geometry and collision so they are easy to test with
+  Vitest and do not require DOM setup.
+- Keep canvas setup and resizing in bootstrap/core code; game modules should
+  receive a ready `CanvasRenderingContext2D`.
+- Use fallback colored rectangles for tile rendering until real sprites exist,
+  matching Issue #9 instead of blocking on art.
+- Avoid framework additions. The existing vanilla Vite + TypeScript shape is
+  sufficient for the requested game foundation.
+- Preserve strict TypeScript. Shared APIs should use explicit return types at
+  module boundaries and avoid `any`.
+- Keep tests focused on deterministic logic: input edge behavior with simulated
+  events, scene transitions, entity pruning, AABB edge cases, tile coordinate
+  conversion, and brick quadrant damage.

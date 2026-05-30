@@ -28,6 +28,7 @@ import {
 } from './game/PowerUps'
 import { loadLevel } from './levels/LevelLoader'
 import { STARTER_LEVELS } from './levels/levels'
+import { TitleScene } from './scenes/TitleScene'
 import { TileType } from './tiles/TileTypes'
 import { renderTileGrid, TileRenderLayer } from './tiles/renderTileGrid'
 
@@ -50,6 +51,14 @@ const clearScreen = (ctx: CanvasRenderingContext2D): void => {
   ctx.clearRect(0, 0, width, height)
   ctx.fillStyle = '#111827'
   ctx.fillRect(0, 0, width, height)
+}
+
+const getTitleStorage = (): Storage | null => {
+  try {
+    return window.localStorage
+  } catch {
+    return null
+  }
 }
 
 const bootLevel = loadLevel(STARTER_LEVELS[0])
@@ -288,7 +297,15 @@ const resizeCanvas = (): void => {
 }
 
 const sceneManager = new SceneManager()
-sceneManager.setScene(bootScene)
+const titleScene = new TitleScene({
+  input,
+  storage: getTitleStorage(),
+  onStart: () => {
+    sceneManager.setScene(bootScene)
+  },
+})
+
+sceneManager.setScene(titleScene)
 
 const gameLoop = new GameLoop(context, {
   update: (dt: number): void => {

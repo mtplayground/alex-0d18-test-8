@@ -86,4 +86,18 @@ describe('loadLevel', () => {
       expect(loaded.wave.length).toBeGreaterThan(0)
     }
   })
+
+  it('keeps starter enemy waves paced progressively', () => {
+    const waveCounts = STARTER_LEVELS.map((starterLevel) =>
+      starterLevel.wave.reduce((total, entry) => total + (entry.count ?? 1), 0),
+    )
+
+    expect(waveCounts).toEqual([4, 5, 6])
+    expect(
+      STARTER_LEVELS[0]?.wave.some((entry) => entry.type === 'armored'),
+    ).toBe(false)
+    expect(
+      STARTER_LEVELS[2]?.wave.some((entry) => entry.type === 'armored'),
+    ).toBe(true)
+  })
 })

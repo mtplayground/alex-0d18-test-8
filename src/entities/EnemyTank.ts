@@ -24,19 +24,19 @@ export const ENEMY_TANK_DEFINITIONS: Record<
   EnemyTankDefinition
 > = {
   basic: {
-    speed: 72,
+    speed: 68,
     hitPoints: 1,
     scoreValue: 100,
   },
   fast: {
-    speed: 112,
+    speed: 104,
     hitPoints: 1,
     scoreValue: 150,
   },
   armored: {
-    speed: 56,
-    hitPoints: 3,
-    scoreValue: 300,
+    speed: 58,
+    hitPoints: 2,
+    scoreValue: 250,
   },
 }
 

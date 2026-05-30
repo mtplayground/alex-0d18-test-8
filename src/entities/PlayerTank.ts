@@ -56,6 +56,46 @@ const getMovementDelta = (direction: Direction, distance: number): Vector2 => {
   }
 }
 
+const moveUntilBlocked = (
+  position: Vector2,
+  direction: Direction,
+  distance: number,
+  tankSize: Vector2,
+  grid: TileGrid,
+): Vector2 => {
+  const maxStepDistance = grid.tileSize / 4
+  let remainingDistance = distance
+  let currentPosition = position
+
+  while (remainingDistance > 0) {
+    const stepDistance = Math.min(remainingDistance, maxStepDistance)
+    const delta = getMovementDelta(direction, stepDistance)
+    const nextPosition = {
+      x: currentPosition.x + delta.x,
+      y: currentPosition.y + delta.y,
+    }
+
+    if (
+      !canTankOccupyBounds(
+        {
+          x: nextPosition.x,
+          y: nextPosition.y,
+          width: tankSize.x,
+          height: tankSize.y,
+        },
+        grid,
+      )
+    ) {
+      break
+    }
+
+    currentPosition = nextPosition
+    remainingDistance -= stepDistance
+  }
+
+  return currentPosition
+}
+
 export const isTankBlockingTile = (tileType: TileType): boolean =>
   tileType === TileType.Brick ||
   tileType === TileType.Steel ||
@@ -151,24 +191,12 @@ export class PlayerTank extends Tank {
       nextDirection,
       grid.tileSize,
     )
-    const delta = getMovementDelta(nextDirection, this.speed * dt)
-    const nextPosition = {
-      x: snappedPosition.x + delta.x,
-      y: snappedPosition.y + delta.y,
-    }
-
-    if (
-      canTankOccupyBounds(
-        {
-          x: nextPosition.x,
-          y: nextPosition.y,
-          width: this.size.x,
-          height: this.size.y,
-        },
-        grid,
-      )
-    ) {
-      this.position = nextPosition
-    }
+    this.position = moveUntilBlocked(
+      snappedPosition,
+      nextDirection,
+      this.speed * dt,
+      this.size,
+      grid,
+    )
   }
 }

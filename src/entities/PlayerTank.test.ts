@@ -75,8 +75,23 @@ describe('PlayerTank', () => {
 
     tank.updateFromInput(3, inputFor('ArrowLeft'), grid)
 
-    expect(tank.position).toEqual({ x: 64, y: 64 })
+    expect(tank.position).toEqual({ x: 0, y: 64 })
     expect(tank.direction).toBe('left')
+  })
+
+  it('does not tunnel through blocking terrain on large frame deltas', () => {
+    const grid = new TileGrid(7, 5, 32)
+    grid.set(3, 2, TileType.Brick)
+    const tank = new PlayerTank({
+      position: { x: 32, y: 64 },
+      size: { x: 32, y: 32 },
+      speed: 64,
+    })
+
+    tank.updateFromInput(2, inputFor('ArrowRight'), grid)
+
+    expect(tank.position).toEqual({ x: 64, y: 64 })
+    expect(tank.direction).toBe('right')
   })
 
   it('passes over non-blocking terrain', () => {

@@ -38,6 +38,19 @@ describe('EnemyTank', () => {
     expect(armored.scoreValue).toBe(ENEMY_TANK_DEFINITIONS.armored.scoreValue)
   })
 
+  it('keeps variant balance in the intended order', () => {
+    expect(ENEMY_TANK_DEFINITIONS.armored.hitPoints).toBe(2)
+    expect(ENEMY_TANK_DEFINITIONS.fast.speed).toBeGreaterThan(
+      ENEMY_TANK_DEFINITIONS.basic.speed,
+    )
+    expect(ENEMY_TANK_DEFINITIONS.basic.speed).toBeGreaterThan(
+      ENEMY_TANK_DEFINITIONS.armored.speed,
+    )
+    expect(ENEMY_TANK_DEFINITIONS.armored.scoreValue).toBeGreaterThan(
+      ENEMY_TANK_DEFINITIONS.fast.scoreValue,
+    )
+  })
+
   it('can be flagged to drop a power-up', () => {
     const tank = new EnemyTank({
       ...baseOptions,

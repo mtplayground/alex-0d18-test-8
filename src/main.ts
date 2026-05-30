@@ -1,5 +1,6 @@
 import './style.css'
 import { GameLoop } from './core/GameLoop'
+import { input } from './core/Input'
 
 const canvas = document.querySelector<HTMLCanvasElement>('#app-canvas')
 
@@ -24,6 +25,7 @@ const clearScreen = (): void => {
 
 const update = (dt: number): void => {
   void dt
+  input.endFrame()
 }
 
 const render = (ctx: CanvasRenderingContext2D, fps: number): void => {

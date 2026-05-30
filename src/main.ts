@@ -25,8 +25,8 @@ import {
   resolvePowerUpPickups,
   updatePowerUpEffects,
 } from './game/PowerUps'
-import { BrickQuadrant } from './tiles/BrickDamage'
-import { TileGrid } from './tiles/TileGrid'
+import { loadLevel } from './levels/LevelLoader'
+import { STARTER_LEVELS } from './levels/levels'
 import { TileType } from './tiles/TileTypes'
 import { renderTileGrid, TileRenderLayer } from './tiles/renderTileGrid'
 
@@ -51,36 +51,8 @@ const clearScreen = (ctx: CanvasRenderingContext2D): void => {
   ctx.fillRect(0, 0, width, height)
 }
 
-const createBootTileGrid = (): TileGrid => {
-  const grid = new TileGrid(13, 13, 32)
-
-  for (let x = 0; x < grid.width; x += 1) {
-    grid.set(x, 0, TileType.Steel)
-    grid.set(x, grid.height - 1, TileType.Steel)
-  }
-
-  for (let y = 1; y < grid.height - 1; y += 1) {
-    grid.set(0, y, TileType.Steel)
-    grid.set(grid.width - 1, y, TileType.Steel)
-  }
-
-  grid.set(2, 2, TileType.Brick)
-  grid.set(3, 2, TileType.Brick)
-  grid.set(4, 2, TileType.Brick)
-  grid.set(2, 3, TileType.Water)
-  grid.set(3, 3, TileType.Water)
-  grid.set(8, 3, TileType.Grass)
-  grid.set(9, 3, TileType.Grass)
-  grid.set(6, 6, TileType.Ice)
-  grid.set(7, 6, TileType.Ice)
-  grid.set(6, 10, TileType.Base)
-  grid.damageQuadrant(3, 2, BrickQuadrant.TopLeft)
-  grid.damageQuadrant(3, 2, BrickQuadrant.BottomRight)
-
-  return grid
-}
-
-const bootTileGrid = createBootTileGrid()
+const bootLevel = loadLevel(STARTER_LEVELS[0])
+const bootTileGrid = bootLevel.grid
 const bulletManager = new EntityManager()
 const tankManager = new EntityManager()
 const effectManager = new EntityManager()
@@ -93,24 +65,14 @@ const gameState = {
   baseDestroyed: false,
 }
 let latestSceneChangeEvent: SceneChangeEvent | null = null
-const topSpawnPoints = [
-  { x: bootTileGrid.tileSize, y: bootTileGrid.tileSize },
-  { x: 6 * bootTileGrid.tileSize, y: bootTileGrid.tileSize },
-  { x: 11 * bootTileGrid.tileSize, y: bootTileGrid.tileSize },
-]
 const enemySpawner = new EnemySpawner({
-  spawnPoints: topSpawnPoints,
-  enemySize: { x: bootTileGrid.tileSize, y: bootTileGrid.tileSize },
-  wave: [
-    { type: 'basic', powerUpType: 'extra-life' },
-    { type: 'basic', powerUpType: 'base-shield' },
-    { type: 'fast', powerUpType: 'freeze-enemies' },
-    { type: 'armored', powerUpType: 'weapon-upgrade' },
-  ],
+  spawnPoints: bootLevel.enemySpawnPoints,
+  enemySize: bootLevel.enemySize,
+  wave: bootLevel.wave,
 })
 const playerTank = tankManager.add(
   new Tank({
-    position: { x: 6 * bootTileGrid.tileSize, y: 9 * bootTileGrid.tileSize },
+    position: bootLevel.playerSpawn,
     size: { x: bootTileGrid.tileSize, y: bootTileGrid.tileSize },
     faction: 'player',
     direction: 'up',

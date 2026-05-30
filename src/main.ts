@@ -28,7 +28,6 @@ import {
   type SceneChangeEvent,
 } from './game/LevelState'
 import {
-  areEnemiesFrozen,
   createPowerUpDrop,
   createPowerUpEffectState,
   isBaseShieldActive,
@@ -38,6 +37,11 @@ import {
 } from './game/PowerUps'
 import { loadLevel } from './levels/LevelLoader'
 import { STARTER_LEVELS } from './levels/levels'
+import {
+  renderHud,
+  writeHudAttributes,
+  type HudSnapshot,
+} from './rendering/HudRenderer'
 import { PauseScene } from './scenes/PauseScene'
 import { ResultScene } from './scenes/ResultScene'
 import { DEFAULT_HIGH_SCORE_KEY, TitleScene } from './scenes/TitleScene'
@@ -256,28 +260,15 @@ const createGameScene = (levelIndex: number, initialScore = 0): Scene => {
     return latestSceneChangeEvent
   }
 
-  const getSceneStatusText = (): string => {
-    if (!latestSceneChangeEvent) {
-      return 'Playing'
-    }
+  const getEnemiesRemaining = (): number =>
+    enemySpawner.remainingEnemies + getActiveEnemyCount()
 
-    if (latestSceneChangeEvent.target === 'next-level') {
-      return `Next level: ${latestSceneChangeEvent.nextLevelIndex + 1}`
-    }
-
-    return `Game over: ${latestSceneChangeEvent.reason}`
-  }
-
-  const getPowerUpStatusText = (): string =>
-    [
-      isBaseShieldActive(powerUpEffects) ? 'Shield' : null,
-      isWeaponUpgraded(powerUpEffects)
-        ? `Weapon ${powerUpEffects.weaponLevel}`
-        : null,
-      areEnemiesFrozen(powerUpEffects) ? 'Freeze' : null,
-    ]
-      .filter((value): value is string => value !== null)
-      .join(', ') || 'None'
+  const getHudSnapshot = (): HudSnapshot => ({
+    lives: playerTank.lives,
+    score: gameState.score,
+    level: levelIndex + 1,
+    enemiesRemaining: getEnemiesRemaining(),
+  })
 
   const handleSceneChangeEvent = (event: SceneChangeEvent): void => {
     if (event.target === 'game-over') {
@@ -357,31 +348,11 @@ const createGameScene = (levelIndex: number, initialScore = 0): Scene => {
       effectManager.render(ctx)
       renderTileGrid(ctx, tileGrid, { layer: TileRenderLayer.Overlay })
 
-      ctx.save()
-      ctx.fillStyle = '#f9fafb'
-      ctx.font = '14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
-      ctx.textBaseline = 'top'
-      ctx.fillText(`FPS: ${fps}`, 12, 12)
-      ctx.fillText(`Lives: ${playerTank.lives}`, 12, 32)
-      ctx.fillText(`Score: ${gameState.score}`, 12, 52)
-      ctx.fillText(`Level: ${levelIndex + 1}`, 12, 72)
-      ctx.fillText(`Wave: ${enemySpawner.remainingEnemies}`, 12, 92)
-      ctx.fillText(`Scene: ${getSceneStatusText()}`, 12, 112)
-      ctx.fillText(`Power: ${getPowerUpStatusText()}`, 12, 132)
-      ctx.restore()
+      void fps
 
-      const sceneStatus = getSceneStatusText()
-      canvas.dataset.hudLives = playerTank.lives.toString()
-      canvas.dataset.hudScore = gameState.score.toString()
-      canvas.dataset.hudLevel = (levelIndex + 1).toString()
-      canvas.dataset.hudWave = enemySpawner.remainingEnemies.toString()
-      canvas.dataset.hudScene = sceneStatus
-      canvas.setAttribute(
-        'aria-label',
-        `Game HUD. Lives ${playerTank.lives}. Score ${gameState.score}. Level ${
-          levelIndex + 1
-        }. Wave ${enemySpawner.remainingEnemies}. Scene ${sceneStatus}.`,
-      )
+      const hudSnapshot = getHudSnapshot()
+      renderHud(ctx, hudSnapshot)
+      writeHudAttributes(canvas, hudSnapshot)
     },
   }
 

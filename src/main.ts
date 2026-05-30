@@ -11,6 +11,10 @@ import { BulletFiringController } from './game/BulletFiringController'
 import { resolveBulletTankCollisions } from './game/BulletTankCollision'
 import { resolveBulletTerrainCollision } from './game/BulletTerrainCollision'
 import { EnemySpawner } from './game/EnemySpawner'
+import {
+  LevelSceneChangeEmitter,
+  type SceneChangeEvent,
+} from './game/LevelState'
 import { BrickQuadrant } from './tiles/BrickDamage'
 import { TileGrid } from './tiles/TileGrid'
 import { TileType } from './tiles/TileTypes'
@@ -71,9 +75,12 @@ const bulletManager = new EntityManager()
 const tankManager = new EntityManager()
 const effectManager = new EntityManager()
 const playerFiringController = new BulletFiringController()
+const levelSceneChangeEmitter = new LevelSceneChangeEmitter()
 const gameState = {
   score: 0,
+  baseDestroyed: false,
 }
+let latestSceneChangeEvent: SceneChangeEvent | null = null
 const topSpawnPoints = [
   { x: bootTileGrid.tileSize, y: bootTileGrid.tileSize },
   { x: 6 * bootTileGrid.tileSize, y: bootTileGrid.tileSize },
@@ -116,6 +123,9 @@ const getActiveEnemies = (): EnemyTank[] =>
     .getAll()
     .filter((entity): entity is EnemyTank => entity instanceof EnemyTank)
 
+const getActiveEnemyCount = (): number =>
+  getActiveEnemies().filter((enemy) => enemy.alive).length
+
 const spawnEnemies = (dt: number): void => {
   const result = enemySpawner.update(dt, getActiveEnemies())
 
@@ -141,7 +151,11 @@ const pruneBulletsOutsideGrid = (): void => {
 
 const resolveBulletTerrainCollisions = (): void => {
   for (const bullet of getActiveBullets()) {
-    resolveBulletTerrainCollision(bullet, bootTileGrid)
+    const result = resolveBulletTerrainCollision(bullet, bootTileGrid)
+
+    if (result.baseDestroyed) {
+      gameState.baseDestroyed = true
+    }
   }
 
   bulletManager.pruneDead()
@@ -162,10 +176,40 @@ const resolveBulletTankHits = (): void => {
   tankManager.pruneDead()
 }
 
+const emitSceneChangeEvents = (): void => {
+  if (latestSceneChangeEvent) {
+    return
+  }
+
+  latestSceneChangeEvent = levelSceneChangeEmitter.update({
+    waveExhausted: enemySpawner.isExhausted,
+    activeEnemyCount: getActiveEnemyCount(),
+    playerLives: playerTank.lives,
+    baseDestroyed: gameState.baseDestroyed,
+  })
+}
+
+const getSceneStatusText = (): string => {
+  if (!latestSceneChangeEvent) {
+    return 'Playing'
+  }
+
+  if (latestSceneChangeEvent.target === 'next-level') {
+    return `Next level: ${latestSceneChangeEvent.nextLevelIndex + 1}`
+  }
+
+  return `Game over: ${latestSceneChangeEvent.reason}`
+}
+
 const bootScene: Scene = {
   enter: () => undefined,
   exit: () => undefined,
   update: (dt: number): void => {
+    if (latestSceneChangeEvent) {
+      effectManager.update(dt)
+      return
+    }
+
     spawnEnemies(dt)
     playerFiringController.update(dt)
 
@@ -186,6 +230,7 @@ const bootScene: Scene = {
     resolveBulletTankHits()
     pruneBulletsOutsideGrid()
     effectManager.update(dt)
+    emitSceneChangeEvents()
   },
   render: (ctx: CanvasRenderingContext2D, fps: number): void => {
     clearScreen(ctx)
@@ -203,6 +248,7 @@ const bootScene: Scene = {
     ctx.fillText(`Lives: ${playerTank.lives}`, 12, 32)
     ctx.fillText(`Score: ${gameState.score}`, 12, 52)
     ctx.fillText(`Wave: ${enemySpawner.remainingEnemies}`, 12, 72)
+    ctx.fillText(`Scene: ${getSceneStatusText()}`, 12, 92)
     ctx.restore()
   },
 }

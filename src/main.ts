@@ -10,6 +10,7 @@ import { Tank } from './entities/Tank'
 import { BulletFiringController } from './game/BulletFiringController'
 import { resolveBulletTankCollisions } from './game/BulletTankCollision'
 import { resolveBulletTerrainCollision } from './game/BulletTerrainCollision'
+import { EnemySpawner } from './game/EnemySpawner'
 import { BrickQuadrant } from './tiles/BrickDamage'
 import { TileGrid } from './tiles/TileGrid'
 import { TileType } from './tiles/TileTypes'
@@ -73,6 +74,16 @@ const playerFiringController = new BulletFiringController()
 const gameState = {
   score: 0,
 }
+const topSpawnPoints = [
+  { x: bootTileGrid.tileSize, y: bootTileGrid.tileSize },
+  { x: 6 * bootTileGrid.tileSize, y: bootTileGrid.tileSize },
+  { x: 11 * bootTileGrid.tileSize, y: bootTileGrid.tileSize },
+]
+const enemySpawner = new EnemySpawner({
+  spawnPoints: topSpawnPoints,
+  enemySize: { x: bootTileGrid.tileSize, y: bootTileGrid.tileSize },
+  wave: [{ type: 'basic', count: 2 }, { type: 'fast' }, { type: 'armored' }],
+})
 const playerTank = tankManager.add(
   new Tank({
     position: { x: 6 * bootTileGrid.tileSize, y: 9 * bootTileGrid.tileSize },
@@ -80,14 +91,6 @@ const playerTank = tankManager.add(
     faction: 'player',
     direction: 'up',
     lives: 3,
-  }),
-)
-tankManager.add(
-  new EnemyTank({
-    position: { x: 6 * bootTileGrid.tileSize, y: 5 * bootTileGrid.tileSize },
-    size: { x: bootTileGrid.tileSize, y: bootTileGrid.tileSize },
-    type: 'basic',
-    direction: 'down',
   }),
 )
 
@@ -107,6 +110,22 @@ const getActiveTanks = (): Tank[] =>
   tankManager
     .getAll()
     .filter((entity): entity is Tank => entity instanceof Tank)
+
+const getActiveEnemies = (): EnemyTank[] =>
+  tankManager
+    .getAll()
+    .filter((entity): entity is EnemyTank => entity instanceof EnemyTank)
+
+const spawnEnemies = (dt: number): void => {
+  const result = enemySpawner.update(dt, getActiveEnemies())
+
+  if (!result) {
+    return
+  }
+
+  tankManager.add(result.enemy)
+  effectManager.add(result.flash)
+}
 
 const pruneBulletsOutsideGrid = (): void => {
   for (const bullet of getActiveBullets()) {
@@ -147,6 +166,7 @@ const bootScene: Scene = {
   enter: () => undefined,
   exit: () => undefined,
   update: (dt: number): void => {
+    spawnEnemies(dt)
     playerFiringController.update(dt)
 
     const bullet = playerTank.alive
@@ -182,6 +202,7 @@ const bootScene: Scene = {
     ctx.fillText(`FPS: ${fps}`, 12, 12)
     ctx.fillText(`Lives: ${playerTank.lives}`, 12, 32)
     ctx.fillText(`Score: ${gameState.score}`, 12, 52)
+    ctx.fillText(`Wave: ${enemySpawner.remainingEnemies}`, 12, 72)
     ctx.restore()
   },
 }

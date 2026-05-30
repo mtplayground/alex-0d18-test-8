@@ -7,10 +7,12 @@ describe('Tank', () => {
       position: { x: 0, y: 0 },
       size: { x: 32, y: 32 },
       faction: 'enemy',
+      speed: 80,
       hitPoints: 2,
       scoreValue: 200,
     })
 
+    expect(tank.speed).toBe(80)
     expect(tank.damage()).toEqual({
       destroyed: false,
       lifeLost: false,
@@ -54,6 +56,16 @@ describe('Tank', () => {
   })
 
   it('rejects invalid damage state', () => {
+    expect(
+      () =>
+        new Tank({
+          position: { x: 0, y: 0 },
+          size: { x: 32, y: 32 },
+          faction: 'enemy',
+          speed: -1,
+        }),
+    ).toThrow('Tank speed must be a finite, non-negative number.')
+
     expect(
       () =>
         new Tank({

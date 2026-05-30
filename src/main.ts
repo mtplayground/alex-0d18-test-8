@@ -4,6 +4,7 @@ import { input } from './core/Input'
 import type { Scene } from './core/Scene'
 import { SceneManager } from './core/SceneManager'
 import { Bullet } from './entities/Bullet'
+import { EnemyTank } from './entities/EnemyTank'
 import { EntityManager } from './entities/EntityManager'
 import { Tank } from './entities/Tank'
 import { BulletFiringController } from './game/BulletFiringController'
@@ -82,12 +83,11 @@ const playerTank = tankManager.add(
   }),
 )
 tankManager.add(
-  new Tank({
+  new EnemyTank({
     position: { x: 6 * bootTileGrid.tileSize, y: 5 * bootTileGrid.tileSize },
     size: { x: bootTileGrid.tileSize, y: bootTileGrid.tileSize },
-    faction: 'enemy',
+    type: 'basic',
     direction: 'down',
-    scoreValue: 100,
   }),
 )
 

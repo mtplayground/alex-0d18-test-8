@@ -1,95 +1,109 @@
-Architecture plan for Issues #3-#12: alex-0d18-test-8 canvas game foundation
+Architecture plan for Issues #23-#32: alex-0d18-test-8 gameplay layer
 
 Current foundation:
-- The app is a minimal Vite + TypeScript browser project.
-- `index.html` owns the full-window `#app-canvas` element.
-- `src/main.ts` currently validates the canvas, configures the 2D context, handles
-  device-pixel-ratio resizing, and renders a dark baseline background.
-- The product name is `alex-0d18-test-8` per PRODUCT.md; do not invent or
-  substitute another brand.
+- The product name is `alex-0d18-test-8` per PRODUCT.md.
+- The app is a Vite + TypeScript full-window canvas game foundation.
+- Existing modules provide `GameLoop`, `KeyboardInput`, `SceneManager`,
+  `Entity`, `EntityManager`, AABB collision helpers, sprite/fallback rendering,
+  `TileGrid`, tile types, and brick quadrant damage.
+- Tests use Vitest beside source files as `*.test.ts`.
 
 Module structure and file organization:
-- `src/main.ts`: keep this as the browser bootstrap. It should find the canvas,
-  create core services, start the game loop, and avoid owning gameplay logic.
-- `src/core/GameLoop.ts`: fixed-timestep requestAnimationFrame loop with
-  `update(dt)` and `render(ctx)` callbacks, FPS tracking, pause/stop lifecycle,
-  and canvas clear responsibility until scenes take over.
-- `src/core/Input.ts`: singleton-style keyboard state with `isDown(key)`,
-  `wasPressed(key)`, per-frame edge reset, keydown/keyup listeners, and blur
-  cleanup.
-- `src/core/Scene.ts` and `src/core/SceneManager.ts`: scene interface
-  (`enter`, `exit`, `update`, `render`) plus active-scene swap behavior.
-- `src/entities/Entity.ts`: base entity shape/class with position, size,
-  velocity, direction, alive flag, `update(dt)`, and `render(ctx)`.
-- `src/entities/EntityManager.ts`: add/remove/iterate entities, update/render
-  ordering, and dead-entity pruning.
-- `src/physics/aabb.ts`: pure AABB helpers for overlap, point-in-box, and
-  box-vs-box-list queries.
-- `src/assets/AssetLoader.ts`: async image loading registry that resolves after
-  all requested assets are ready and exposes typed lookup.
-- `src/rendering/SpriteRenderer.ts`: spritesheet tile drawing helper with
-  colored-rectangle fallback while art is absent.
-- `src/tiles/TileTypes.ts`: `TileType` enum or string-literal union for Empty,
-  Brick, Steel, Water, Grass, Ice, and Base plus shared tile constants.
-- `src/tiles/TileGrid.ts`: width/height, tile size, `get(x,y)`, `set(x,y,type)`,
-  bounds handling, and world-coordinate/grid-coordinate conversion.
-- `src/tiles/BrickDamage.ts`: per-brick quadrant state and
-  `damageQuadrant(...)` behavior; may live inside `TileGrid` if the state is
-  tile-local and the API stays small.
-- `src/tiles/renderTileGrid.ts`: render all tile types to canvas, including
-  partial brick quadrants and render-order metadata for grass overlay.
-- `src/types/`: introduce only when shared types outgrow the owning modules.
-- Tests should sit next to source as `*.test.ts` or under `src/__tests__/`,
-  following whatever convention Issue #3 establishes.
+- Keep `src/main.ts` as bootstrap only. Gameplay orchestration should move into
+  scene or domain modules instead of growing inside the entrypoint.
+- Add `src/entities/Tank.ts` for shared tank behavior: position/size, direction,
+  speed, HP, faction/owner, movement intent, collision box, and optional reload
+  state.
+- Add `src/entities/PlayerTank.ts` for player-specific input mapping, lives,
+  respawn state if needed, and player firing constraints.
+- Add `src/entities/EnemyTank.ts` for enemy variants. Define `EnemyTankType`
+  configs for basic, fast, and armored speed/HP/score values.
+- Add `src/entities/Bullet.ts` for bullet position, direction, speed, owner
+  faction/id, damage, and screen/world bounds despawn.
+- Add lightweight effect entities in `src/entities/Explosion.ts` and
+  `src/entities/SpawnFlash.ts`, or a shared timed-effect base if duplication
+  becomes meaningful.
+- Add `src/entities/PowerUp.ts` for power-up type, duration, pickup collision,
+  and rendering metadata.
+- Add `src/game/` for gameplay coordination that should not live on individual
+  entities:
+  - `movement.ts`: grid-aligned movement helpers and tile/entity blocking.
+  - `combat.ts`: bullet creation, bullet-vs-terrain, bullet-vs-tank, scoring,
+    friendly-fire filtering, and explosion spawning.
+  - `enemyAi.ts`: pure enemy decision function with deterministic RNG input.
+  - `spawner.ts`: spawn queue, spawn-point rotation, concurrent enemy cap, and
+    spawn flash timing.
+  - `powerUps.ts`: effect application and duration ticking.
+  - `levelState.ts`: level complete, base destroyed, lives exhausted, and
+    scene-change event calculation.
+- Add `src/levels/` for level data and loading:
+  - `LevelTypes.ts`: level schema, spawn config, enemy wave entries, and map
+    symbol definitions.
+  - `LevelLoader.ts`: parse/validate level data into `TileGrid` plus spawn
+    config and player/base spawn positions.
+  - `levels.ts` or JSON assets for three starter levels.
+- Add `src/game/GameScene.ts` once gameplay needs a scene owner. It should own
+  the `TileGrid`, `EntityManager`, level state, spawner, input, update order,
+  and render order.
 
 Shared types:
-- Use a small `Vector2` type for positions, sizes, and velocities:
-  `{ x: number; y: number }`.
-- Use an `AABB` type with `{ x: number; y: number; width: number; height: number }`
-  and keep collision helpers independent from canvas or entity classes.
-- Use a `Direction` union (`'up' | 'down' | 'left' | 'right'`) for entities.
-- Treat `dt` as seconds across update APIs. Fixed-step constants should be named
-  in seconds to avoid mixing milliseconds and seconds.
-- Keep grid coordinates integer tile indices and world coordinates pixel-based.
+- Reuse `Vector2` and `Direction` from `src/entities/Entity.ts`.
+- Reuse `AABB` helpers from `src/physics/aabb.ts`; add small conversion helpers
+  such as `entityToAabb(entity)` only if repeated code appears.
+- Use `Faction = 'player' | 'enemy'` or equivalent for bullet ownership and
+  friendly-fire checks.
+- Treat `dt` as seconds in all entity and game update APIs.
+- Keep world coordinates in pixels and tile coordinates as integer grid indices.
+- Keep level dimensions compatible with `TileGrid` and existing tile constants.
 
-Issue dependencies and implementation order:
-- #3 Add ESLint, Prettier, and Vitest configuration. This should happen before
-  broad module work so future issues inherit consistent formatting, linting, and
-  a working `npm test` script.
-- #4 Build the core game loop skeleton. Depends on the Vite/canvas app shell and
-  provides the runtime hook that later input, scenes, entities, and rendering use.
-- #5 Implement keyboard input handler. Depends on the loop so `wasPressed` can be
-  cleared once per frame.
-- #6 Implement scene manager. Depends on the loop and should be wired as the
-  loop's update/render target.
-- #7 Implement entity base class and entity manager. Depends on the loop and
-  should remain scene-agnostic so any scene can own an EntityManager.
-- #8 Implement AABB collision detection. Depends on shared position/box types
-  from the entity work but should stay pure and unit-tested.
-- #9 Implement asset loader and sprite renderer. Depends on the Vite/browser
-  setup; renderer should work with loaded images or fallback rectangles.
-- #10 Define tile types and tile grid data structure. Depends on shared geometry
-  conventions and should be unit-tested before rendering is added.
-- #11 Implement brick wall sub-tile damage. Depends on tile grid/types and should
-  extend brick state without changing non-brick tile behavior.
-- #12 Render the tile grid to the canvas. Depends on tile types/grid, brick
-  damage, and sprite/fallback rendering. Grass needs a render-order flag so it
-  can draw above tanks/entities when gameplay entities arrive.
+Dependencies between issues:
+- #32 Player tank movement should land early because bullets, pickups, lives,
+  and game-over state all depend on a player entity. It depends on existing
+  input, entity, tile, and collision foundations.
+- #23 Bullet entity and firing depends on #32 or at least a tank firing API.
+  Implement reload cooldown and max active bullets through shared tank/combat
+  helpers so enemies can reuse the same firing path later.
+- #24 Bullet-vs-terrain collision depends on #23 and existing tile/brick damage.
+  It should mutate bricks through `TileGrid.damageQuadrant`, stop at steel, pass
+  water/grass, destroy the base, and despawn bullets on hit.
+- #26 Enemy tank entity and types can share the tank base from #32/#23. It
+  establishes enemy HP, movement speed, score value, and power-up flags.
+- #25 Tank-vs-bullet collision depends on #23 and #26/#32. It applies damage,
+  removes defeated enemies, decrements player lives, awards score, filters
+  friendly fire, and spawns explosions.
+- #27 Enemy AI depends on #26. Keep the decision function pure and unit-tested:
+  choose directions, react to blocked movement or timers, aim toward player/base
+  when aligned, and request firing without directly mutating entities.
+- #31 Level loader depends on `TileGrid` and should be implemented before wave
+  completion is finalized. It provides map layout, base/player spawn, top spawn
+  points, and enemy wave data.
+- #28 Enemy spawner depends on #26 and #31. It consumes the level wave list,
+  spawns from configured top points, caps concurrent enemies around four, and
+  adds a brief spawn flash.
+- #30 Power-ups depend on #26 and #32. Specially flagged enemies can drop
+  entities; player overlap applies extra life, base shield, weapon upgrade, or
+  enemy freeze with durations where applicable.
+- #29 Level completion and game-over conditions depends on #24/#25/#28/#31. It
+  advances when the wave pool is exhausted and all enemies are gone, and emits
+  game-over scene changes when the base is destroyed or lives reach zero.
 
 Key design decisions:
-- Keep modules small and dependency direction one-way: core loop and input at
-  the bottom, scenes compose entities/tiles/assets, rendering helpers do not
-  own game state.
-- Prefer pure functions for geometry and collision so they are easy to test with
-  Vitest and do not require DOM setup.
-- Keep canvas setup and resizing in bootstrap/core code; game modules should
-  receive a ready `CanvasRenderingContext2D`.
-- Use fallback colored rectangles for tile rendering until real sprites exist,
-  matching Issue #9 instead of blocking on art.
-- Avoid framework additions. The existing vanilla Vite + TypeScript shape is
-  sufficient for the requested game foundation.
-- Preserve strict TypeScript. Shared APIs should use explicit return types at
-  module boundaries and avoid `any`.
-- Keep tests focused on deterministic logic: input edge behavior with simulated
-  events, scene transitions, entity pruning, AABB edge cases, tile coordinate
-  conversion, and brick quadrant damage.
+- Build one shared tank movement/firing model and specialize it through player,
+  enemy, and AI modules. That avoids duplicating collision, facing, and reload
+  logic.
+- Keep AI, level parsing, collision resolution, spawner state, and win/loss
+  checks mostly pure so each issue can add focused Vitest coverage without
+  requiring a running canvas.
+- Use the existing `EntityManager` for runtime entities but add typed query
+  helpers locally in `GameScene` or `game/` modules instead of changing the base
+  manager unless repeated casts become a problem.
+- Render in layers: base tiles, non-overlay entities/effects, grass overlay
+  tiles, then HUD/debug overlays if added later.
+- Treat terrain as authoritative for blocking and projectile interaction:
+  brick/steel/base block tanks, water blocks tanks but not bullets, grass is an
+  overlay, map edges block everything.
+- Prefer compact JSON level objects with an ASCII map string array plus explicit
+  wave entries. ASCII keeps maps readable; JSON carries typed spawn and wave
+  metadata.
+- Keep issue work independently mergeable. Each issue should add tests for its
+  new logic and avoid broad rewrites outside the modules it owns.

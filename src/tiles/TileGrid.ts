@@ -1,4 +1,11 @@
 import type { Vector2 } from '../entities/Entity'
+import {
+  BrickQuadrant,
+  createIntactBrickDamage,
+  damageBrickQuadrant,
+  type BrickDamageState,
+  isBrickFullyDestroyed,
+} from './BrickDamage'
 import { assertTileType, TileType } from './TileTypes'
 
 export interface GridCoordinate {
@@ -23,6 +30,7 @@ export class TileGrid {
   public readonly height: number
   public readonly tileSize: number
   private readonly tiles: TileType[]
+  private readonly brickDamage = new Map<number, BrickDamageState>()
 
   public constructor(
     width: number,
@@ -58,11 +66,54 @@ export class TileGrid {
   }
 
   public set(x: number, y: number, type: TileType): void {
-    this.tiles[this.getIndex(x, y)] = assertTileType(type)
+    const index = this.getIndex(x, y)
+    this.tiles[index] = assertTileType(type)
+    this.brickDamage.delete(index)
   }
 
   public fill(type: TileType): void {
     this.tiles.fill(assertTileType(type))
+    this.brickDamage.clear()
+  }
+
+  public getBrickDamage(x: number, y: number): BrickDamageState | null {
+    const index = this.getIndex(x, y)
+
+    if (this.tiles[index] !== TileType.Brick) {
+      return null
+    }
+
+    return this.brickDamage.get(index) ?? createIntactBrickDamage()
+  }
+
+  public damageQuadrant(
+    x: number,
+    y: number,
+    quadrant: BrickQuadrant,
+  ): boolean {
+    const index = this.getIndex(x, y)
+
+    if (this.tiles[index] !== TileType.Brick) {
+      return false
+    }
+
+    const currentDamage =
+      this.brickDamage.get(index) ?? createIntactBrickDamage()
+
+    if (currentDamage[quadrant]) {
+      return false
+    }
+
+    const nextDamage = damageBrickQuadrant(currentDamage, quadrant)
+
+    if (isBrickFullyDestroyed(nextDamage)) {
+      this.tiles[index] = TileType.Empty
+      this.brickDamage.delete(index)
+      return true
+    }
+
+    this.brickDamage.set(index, nextDamage)
+    return true
   }
 
   public isInBounds(x: number, y: number): boolean {

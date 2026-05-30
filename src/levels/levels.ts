@@ -14,7 +14,7 @@ export const STARTER_LEVELS: readonly LevelDefinition[] = [
       { type: 'basic', powerUpType: 'extra-life' },
       { type: 'basic', powerUpType: 'base-shield' },
       { type: 'fast', powerUpType: 'freeze-enemies' },
-      { type: 'armored', powerUpType: 'weapon-upgrade' },
+      { type: 'basic', powerUpType: 'weapon-upgrade' },
     ],
     map: [
       'SSSSSSSSSSSSS',
@@ -42,9 +42,11 @@ export const STARTER_LEVELS: readonly LevelDefinition[] = [
       { x: 11, y: 1 },
     ],
     wave: [
-      { type: 'fast', count: 2 },
+      { type: 'fast' },
+      { type: 'basic' },
       { type: 'basic', powerUpType: 'extra-life' },
       { type: 'armored', powerUpType: 'base-shield' },
+      { type: 'fast', powerUpType: 'freeze-enemies' },
     ],
     map: [
       'SSSSSSSSSSSSS',
@@ -75,6 +77,7 @@ export const STARTER_LEVELS: readonly LevelDefinition[] = [
       { type: 'armored' },
       { type: 'fast', powerUpType: 'freeze-enemies' },
       { type: 'basic', count: 2 },
+      { type: 'fast' },
       { type: 'armored', powerUpType: 'weapon-upgrade' },
     ],
     map: [

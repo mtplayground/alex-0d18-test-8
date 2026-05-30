@@ -6,6 +6,7 @@ import { SceneManager } from './core/SceneManager'
 import { Bullet } from './entities/Bullet'
 import { EntityManager } from './entities/EntityManager'
 import { BulletFiringController } from './game/BulletFiringController'
+import { resolveBulletTerrainCollision } from './game/BulletTerrainCollision'
 import { BrickQuadrant } from './tiles/BrickDamage'
 import { TileGrid } from './tiles/TileGrid'
 import { TileType } from './tiles/TileTypes'
@@ -88,6 +89,14 @@ const pruneBulletsOutsideGrid = (): void => {
   bulletManager.pruneDead()
 }
 
+const resolveBulletTerrainCollisions = (): void => {
+  for (const bullet of getActiveBullets()) {
+    resolveBulletTerrainCollision(bullet, bootTileGrid)
+  }
+
+  bulletManager.pruneDead()
+}
+
 const renderPlayerShooter = (ctx: CanvasRenderingContext2D): void => {
   ctx.save()
   ctx.fillStyle = '#38bdf8'
@@ -124,6 +133,7 @@ const bootScene: Scene = {
     }
 
     bulletManager.update(dt)
+    resolveBulletTerrainCollisions()
     pruneBulletsOutsideGrid()
   },
   render: (ctx: CanvasRenderingContext2D, fps: number): void => {

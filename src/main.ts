@@ -1,4 +1,5 @@
 import './style.css'
+import { GameLoop } from './core/GameLoop'
 
 const canvas = document.querySelector<HTMLCanvasElement>('#app-canvas')
 
@@ -12,13 +13,28 @@ if (!context) {
   throw new Error('This browser does not support 2D canvas rendering.')
 }
 
-const render = (): void => {
+const clearScreen = (): void => {
   const width = canvas.clientWidth
   const height = canvas.clientHeight
 
   context.clearRect(0, 0, width, height)
   context.fillStyle = '#111827'
   context.fillRect(0, 0, width, height)
+}
+
+const update = (dt: number): void => {
+  void dt
+}
+
+const render = (ctx: CanvasRenderingContext2D, fps: number): void => {
+  clearScreen()
+
+  ctx.save()
+  ctx.fillStyle = '#f9fafb'
+  ctx.font = '14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
+  ctx.textBaseline = 'top'
+  ctx.fillText(`FPS: ${fps}`, 12, 12)
+  ctx.restore()
 }
 
 const resizeCanvas = (): void => {
@@ -32,10 +48,15 @@ const resizeCanvas = (): void => {
   }
 
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
-  render()
 }
+
+const gameLoop = new GameLoop(context, {
+  update,
+  render,
+})
 
 const resizeObserver = new ResizeObserver(resizeCanvas)
 
 resizeObserver.observe(canvas)
 resizeCanvas()
+gameLoop.start()

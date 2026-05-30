@@ -1,4 +1,12 @@
 import './style.css'
+import {
+  playGameOverSound,
+  playPickupSounds,
+  playShootSound,
+  playTankCollisionSounds,
+  playTerrainHitSound,
+  playVictorySound,
+} from './audio/GameSoundEffects'
 import { AudioManager } from './audio/AudioManager'
 import { DEFAULT_AUDIO_SAMPLES } from './audio/sounds'
 import { GameLoop } from './core/GameLoop'
@@ -184,6 +192,7 @@ const createGameScene = (levelIndex: number, initialScore = 0): Scene => {
   const resolveBulletTerrainCollisions = (): void => {
     for (const bullet of getActiveBullets()) {
       const result = resolveBulletTerrainCollision(bullet, tileGrid)
+      playTerrainHitSound(audioManager, result)
 
       if (result.baseDestroyed) {
         if (isBaseShieldActive(powerUpEffects) && result.tile) {
@@ -204,6 +213,8 @@ const createGameScene = (levelIndex: number, initialScore = 0): Scene => {
       gameState,
     )
 
+    playTankCollisionSounds(audioManager, results)
+
     for (const result of results) {
       effectManager.add(result.explosion)
 
@@ -221,7 +232,12 @@ const createGameScene = (levelIndex: number, initialScore = 0): Scene => {
   }
 
   const resolvePlayerPowerUpPickups = (): void => {
-    resolvePowerUpPickups(getActivePowerUps(), playerTank, powerUpEffects)
+    const results = resolvePowerUpPickups(
+      getActivePowerUps(),
+      playerTank,
+      powerUpEffects,
+    )
+    playPickupSounds(audioManager, results)
     powerUpManager.pruneDead()
   }
 
@@ -316,6 +332,7 @@ const createGameScene = (levelIndex: number, initialScore = 0): Scene => {
 
       if (bullet) {
         bulletManager.add(bullet)
+        playShootSound(audioManager)
       }
 
       bulletManager.update(dt)
@@ -417,6 +434,7 @@ const showPauseScene = (gameScene: Scene): void => {
 
 const showGameOverScene = (finalScore: number): void => {
   persistHighScore(finalScore)
+  playGameOverSound(audioManager)
   sceneManager.setScene(
     new ResultScene({
       input,
@@ -429,6 +447,7 @@ const showGameOverScene = (finalScore: number): void => {
 
 const showVictoryScene = (finalScore: number): void => {
   persistHighScore(finalScore)
+  playVictorySound(audioManager)
   sceneManager.setScene(
     new ResultScene({
       input,

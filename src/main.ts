@@ -1,4 +1,6 @@
 import './style.css'
+import { AudioManager } from './audio/AudioManager'
+import { DEFAULT_AUDIO_SAMPLES } from './audio/sounds'
 import { GameLoop } from './core/GameLoop'
 import { input } from './core/Input'
 import type { Scene } from './core/Scene'
@@ -370,6 +372,23 @@ const resizeCanvas = (): void => {
 }
 
 const sceneManager = new SceneManager()
+const audioManager = new AudioManager({
+  storage: getTitleStorage(),
+})
+
+void audioManager.loadSamples(DEFAULT_AUDIO_SAMPLES).catch((error: unknown) => {
+  console.warn('Audio samples could not be loaded.', error)
+})
+
+const toggleMuteIfRequested = (): void => {
+  if (
+    input.wasPressed('KeyM') ||
+    input.wasPressed('m') ||
+    input.wasPressed('M')
+  ) {
+    audioManager.toggleMuted()
+  }
+}
 
 const showTitleScene = (): void => {
   sceneManager.setScene(
@@ -424,6 +443,7 @@ showTitleScene()
 
 const gameLoop = new GameLoop(context, {
   update: (dt: number): void => {
+    toggleMuteIfRequested()
     sceneManager.update(dt)
     input.endFrame()
   },

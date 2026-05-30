@@ -369,6 +369,19 @@ const createGameScene = (levelIndex: number, initialScore = 0): Scene => {
       ctx.fillText(`Scene: ${getSceneStatusText()}`, 12, 112)
       ctx.fillText(`Power: ${getPowerUpStatusText()}`, 12, 132)
       ctx.restore()
+
+      const sceneStatus = getSceneStatusText()
+      canvas.dataset.hudLives = playerTank.lives.toString()
+      canvas.dataset.hudScore = gameState.score.toString()
+      canvas.dataset.hudLevel = (levelIndex + 1).toString()
+      canvas.dataset.hudWave = enemySpawner.remainingEnemies.toString()
+      canvas.dataset.hudScene = sceneStatus
+      canvas.setAttribute(
+        'aria-label',
+        `Game HUD. Lives ${playerTank.lives}. Score ${gameState.score}. Level ${
+          levelIndex + 1
+        }. Wave ${enemySpawner.remainingEnemies}. Scene ${sceneStatus}.`,
+      )
     },
   }
 

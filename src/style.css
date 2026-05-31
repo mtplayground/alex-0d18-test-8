@@ -22,7 +22,11 @@ body {
     BlinkMacSystemFont,
     'Segoe UI',
     sans-serif;
+  color: #f8fafc;
   background: #111827;
+  color-scheme: dark;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 button,
@@ -44,4 +48,15 @@ svg {
   width: 100vw;
   height: 100vh;
   height: 100dvh;
+  background:
+    radial-gradient(circle at 50% 34%, rgba(56, 189, 248, 0.16), transparent 32rem),
+    linear-gradient(180deg, #172033 0%, #111827 55%, #0f172a 100%);
+  image-rendering: pixelated;
+  outline: none;
+  touch-action: none;
+  user-select: none;
+}
+
+#app-canvas:focus-visible {
+  box-shadow: inset 0 0 0 3px rgba(125, 211, 252, 0.85);
 }

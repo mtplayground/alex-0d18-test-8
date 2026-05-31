@@ -7,7 +7,8 @@ full-window HTML canvas. The current `main` branch has a playable title-to-game
 flow with pause, game-over, and victory screens; three starter levels; player
 movement and firing; enemy waves; destructible terrain; power-ups; sound
 effects with persistent mute; high score storage; a canvas HUD; production build
-docs; unit tests; and a Playwright smoke test.
+docs; unit tests; a Playwright smoke test; and Sprite-compatible preview
+deployment settings.
 
 ## What It Does
 
@@ -44,7 +45,8 @@ docs; unit tests; and a Playwright smoke test.
 ## Architecture
 
 - Vite is the browser build and development server; TypeScript is configured in
-  strict browser/bundler mode.
+  strict browser/bundler mode. Vite preview listens on `0.0.0.0:8080` and
+  allows the current Sprite deployment host.
 - Runtime code lives under `src/`, organized by responsibility:
   - `core/`: game loop, input, and scene management.
   - `scenes/`: title, pause, and result scenes.
@@ -58,7 +60,8 @@ docs; unit tests; and a Playwright smoke test.
   - `rendering/`: sprite fallback rendering and HUD rendering.
   - `tiles/`: tile types, grid storage, brick damage, and tile-grid rendering.
   - `physics/`: pure AABB collision helpers.
-- Styling lives in `src/style.css` and keeps the canvas full-window.
+- Styling lives in `src/style.css` and keeps the canvas full-window with a dark
+  page background, canvas backdrop, and pixel-rendering behavior.
 - Tests use Vitest for unit coverage and Playwright for a production-build
   browser smoke test under `e2e/`.
 
@@ -85,3 +88,5 @@ docs; unit tests; and a Playwright smoke test.
   routing, and scene-state evaluation.
 - Keep generated build output, Playwright artifacts, and local environment files
   out of git.
+- If the Sprite deploy URL changes, update `preview.allowedHosts` in
+  `vite.config.ts` before redeploying with `npm run preview`.
